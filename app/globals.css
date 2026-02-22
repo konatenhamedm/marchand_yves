@@ -1,0 +1,406 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ===================================
+   MOOMEN PRO — DESIGN SYSTEM B2B
+   Palette: Bleu Marine Professionnel
+   =================================== */
+:root {
+  /* ── Brand Colors ── */
+  --brand-50:  #EBF2FF;
+  --brand-100: #D6E4FF;
+  --brand-200: #ADC8FF;
+  --brand-300: #85ABFF;
+  --brand-400: #5C8FFF;
+  --brand-500: #0052CC;   /* ← Couleur principale */
+  --brand-600: #0041A8;
+  --brand-700: #003080;
+  --brand-800: #002060;
+  --brand-900: #0A1628;   /* ← Fond sidebar / header */
+
+  /* ── Alias Sémantiques ── */
+  --primary-color:   var(--brand-500);
+  --primary-hover:   var(--brand-600);
+  --primary-light:   var(--brand-300);
+  --primary-dark:    var(--brand-900);
+
+  /* ── Couleurs d'état ── */
+  --color-success:  #16A34A;
+  --color-warning:  #D97706;
+  --color-error:    #DC2626;
+  --color-info:     var(--brand-500);
+
+  /* ── Surfaces & Textes ── */
+  --surface-page:   #F8FAFC;
+  --surface-card:   #FFFFFF;
+  --surface-muted:  #F1F5F9;
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-muted:     #94A3B8;
+  --border-color:   #E2E8F0;
+
+  --radius: 0.625rem; /* 10px — coins sobres */
+}
+
+/* ===================================
+   THÈME CLAIR — SHADCN TOKENS
+   =================================== */
+:root {
+  --background: #F8FAFC;
+  --foreground:  #0F172A;
+
+  --card:            #FFFFFF;
+  --card-foreground: #0F172A;
+
+  --popover:            #FFFFFF;
+  --popover-foreground: #0F172A;
+
+  --primary:            #0052CC;
+  --primary-foreground: #FFFFFF;
+
+  --secondary:            #E2E8F0;
+  --secondary-foreground: #0F172A;
+
+  --muted:            #F1F5F9;
+  --muted-foreground: #64748B;
+
+  --accent:            #EBF2FF;
+  --accent-foreground: #0041A8;
+
+  --destructive: #DC2626;
+
+  --border: #E2E8F0;
+  --input:  #F1F5F9;
+  --ring:   #0052CC;
+
+  --chart-1: #0052CC;
+  --chart-2: #16A34A;
+  --chart-3: #D97706;
+  --chart-4: #DC2626;
+  --chart-5: #7C3AED;
+
+  --sidebar:                    #FFFFFF;
+  --sidebar-foreground:         #0F172A;
+  --sidebar-primary:            #0052CC;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent:             #EBF2FF;
+  --sidebar-accent-foreground:  #0041A8;
+  --sidebar-border:             #E2E8F0;
+  --sidebar-ring:               #0052CC;
+}
+
+/* ===================================
+   THÈME SOMBRE
+   =================================== */
+.dark {
+  --background: #0D1117;
+  --foreground: #E2E8F0;
+
+  --card:            #161B22;
+  --card-foreground: #E2E8F0;
+
+  --popover:            #161B22;
+  --popover-foreground: #E2E8F0;
+
+  --primary:            #3B82F6;
+  --primary-foreground: #FFFFFF;
+
+  --secondary:            #21262D;
+  --secondary-foreground: #E2E8F0;
+
+  --muted:            #21262D;
+  --muted-foreground: #8B949E;
+
+  --accent:            #1D2B3A;
+  --accent-foreground: #58A6FF;
+
+  --destructive: #F85149;
+
+  --border: #30363D;
+  --input:  #21262D;
+  --ring:   #3B82F6;
+
+  --chart-1: #3B82F6;
+  --chart-2: #22C55E;
+  --chart-3: #F59E0B;
+  --chart-4: #F87171;
+  --chart-5: #A78BFA;
+
+  --sidebar:                    #161B22;
+  --sidebar-foreground:         #E2E8F0;
+  --sidebar-primary:            #3B82F6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent:             #1D2B3A;
+  --sidebar-accent-foreground:  #58A6FF;
+  --sidebar-border:             #30363D;
+  --sidebar-ring:               #3B82F6;
+}
+
+/* ===================================
+   BASE
+   =================================== */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Scrollbar sobre */
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #F1F5F9; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+  .dark ::-webkit-scrollbar-track { background: #161B22; }
+  .dark ::-webkit-scrollbar-thumb { background: #30363D; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #58A6FF; }
+}
+
+/* ===================================
+   REACT-SELECT Z-INDEX
+   =================================== */
+@layer base {
+  div[class*="menu"]       { z-index: 999999 !important; }
+  div[class*="MenuPortal"] { z-index: 999999 !important; }
+  div[class*="option"]     { z-index: 999999 !important; pointer-events: auto !important; }
+
+  .react-select__menu,
+  .react-select__menu-portal,
+  .react-select__menu-list,
+  .react-select__option { z-index: 999999 !important; pointer-events: auto !important; }
+}
+
+/* ===================================
+   DIALOG Z-INDEX
+   =================================== */
+@layer base {
+  [data-radix-dialog-overlay],
+  [data-state="open"][data-radix-dialog-overlay] { z-index: 115 !important; }
+
+  [data-radix-dialog-content],
+  [data-state="open"][data-radix-dialog-content] { z-index: 120 !important; }
+
+  [data-radix-portal] { z-index: 115 !important; }
+  [role="dialog"]     { z-index: 120 !important; }
+}
+
+/* ===================================
+   UTILITAIRES MOOMEN PRO
+   =================================== */
+@layer utilities {
+  /* Texte brand */
+  .text-brand    { color: var(--primary-color) !important; }
+  .text-brand-dk { color: var(--brand-700) !important; }
+
+  /* Fonds brand */
+  .bg-brand      { background-color: var(--primary-color) !important; }
+  .bg-brand-soft { background-color: var(--brand-50) !important; }
+
+  /* Bordures brand */
+  .border-brand  { border-color: var(--primary-color) !important; }
+
+  /* Ombres légères & professionnelles */
+  .shadow-card {
+    box-shadow: 0 1px 3px 0 rgba(0,0,0,.07), 0 1px 2px -1px rgba(0,0,0,.05) !important;
+  }
+  .shadow-card-md {
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05) !important;
+  }
+  .shadow-brand-sm {
+    box-shadow: 0 2px 8px rgba(0,82,204,.12) !important;
+  }
+  .shadow-brand {
+    box-shadow: 0 4px 14px rgba(0,82,204,.15) !important;
+  }
+}
+
+/* ===================================
+   COMPOSANTS
+   =================================== */
+@layer components {
+  /* ── Boutons principaux ── */
+  .btn-primary {
+    background-color: var(--primary-color) !important;
+    color: #FFFFFF !important;
+    border: 1px solid var(--primary-color) !important;
+    font-weight: 500 !important;
+    transition: background-color .15s, box-shadow .15s !important;
+  }
+  .btn-primary:hover {
+    background-color: var(--primary-hover) !important;
+    box-shadow: 0 2px 8px rgba(0,82,204,.25) !important;
+  }
+
+  .btn-secondary {
+    background-color: #FFFFFF !important;
+    color: var(--primary-color) !important;
+    border: 1px solid #D6E4FF !important;
+    font-weight: 500 !important;
+  }
+  .btn-secondary:hover {
+    background-color: var(--brand-50) !important;
+  }
+
+  /* ── Boutons d'action (tableaux) ── */
+  .btn-action {
+    height: 2rem !important;
+    width: 2rem !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 0.375rem !important;
+    transition: all .15s ease !important;
+    background-color: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+  }
+  .btn-action-view {
+    background-color: #F1F5F9 !important;
+    color: #475569 !important;
+  }
+  .btn-action-view:hover {
+    background-color: #CBD5E1 !important;
+    color: #0F172A !important;
+  }
+  .btn-action-edit {
+    background-color: #EBF2FF !important;
+    color: var(--primary-color) !important;
+  }
+  .btn-action-edit:hover {
+    background-color: var(--primary-color) !important;
+    color: #FFFFFF !important;
+  }
+  .btn-action-delete {
+    background-color: #FEE2E2 !important;
+    color: #DC2626 !important;
+  }
+  .btn-action-delete:hover {
+    background-color: #DC2626 !important;
+    color: #FFFFFF !important;
+  }
+  .btn-action-contract {
+    background-color: #F0F9FF !important;
+    color: #0284C7 !important;
+  }
+  .btn-action-contract:hover {
+    background-color: #0284C7 !important;
+    color: #FFFFFF !important;
+  }
+  .btn-action-success {
+    background-color: #DCFCE7 !important;
+    color: #16A34A !important;
+  }
+  .btn-action-success:hover {
+    background-color: #16A34A !important;
+    color: #FFFFFF !important;
+  }
+  .btn-action-warning {
+    background-color: #FEF3C7 !important;
+    color: #D97706 !important;
+  }
+  .btn-action-warning:hover {
+    background-color: #D97706 !important;
+    color: #FFFFFF !important;
+  }
+}
+
+/* ===================================
+   FOCUS
+   =================================== */
+@layer base {
+  *:focus-visible {
+    outline: 2px solid var(--primary-color) !important;
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+  button:focus, a:focus, input:focus, select:focus, textarea:focus {
+    outline: none;
+  }
+  button:focus-visible, a:focus-visible {
+    box-shadow: 0 0 0 3px rgba(0,82,204,.2) !important;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(0,82,204,.1) !important;
+  }
+}
+
+/* ===================================
+   ANIMATIONS
+   =================================== */
+@layer utilities {
+  @keyframes fadeInUp {
+    from { opacity:0; transform:translateY(12px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity:0; transform:translateX(-12px); }
+    to   { opacity:1; transform:translateX(0); }
+  }
+  .animate-fade-in-up    { animation: fadeInUp    .35s ease-out !important; }
+  .animate-slide-in-right { animation: slideInRight .25s ease-out !important; }
+}
+
+/* ===================================
+   RESPONSIVE
+   =================================== */
+@layer utilities {
+  @media (max-width: 768px)  { .mobile-hidden  { display:none !important; } }
+  @media (min-width: 769px)  { .desktop-hidden { display:none !important; } }
+}
+
+/* ===================================
+   PRINT
+   =================================== */
+@media print {
+  .no-print { display:none !important; }
+  body       { background:#FFFFFF !important; color:#000000 !important; }
+}
