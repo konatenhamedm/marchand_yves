@@ -51,6 +51,26 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(auth)/reset/page.js"
     ],
+    "/(dashboard)/ventes/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/ventes/page.js"
+    ],
+    "/(dashboard)/articles/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/articles/page.js"
+    ],
+    "/(dashboard)/produits/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/produits/page.js"
+    ],
+    "/(dashboard)/faq/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/faq/page.js"
+    ],
     "/_not-found/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",

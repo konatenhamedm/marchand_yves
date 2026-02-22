@@ -1,9 +1,10 @@
 {
-  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/_not-found/page": "app/_not-found/page.js",
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(auth)/reset/page": "app/(auth)/reset/page.js",
-  "/(dashboard)/liste_magasin/page": "app/(dashboard)/liste_magasin/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/(dashboard)/parametres/pays/page": "app/(dashboard)/parametres/pays/page.js",
-  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js"
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/ventes/page": "app/(dashboard)/ventes/page.js",
+  "/(dashboard)/articles/page": "app/(dashboard)/articles/page.js",
+  "/(dashboard)/produits/page": "app/(dashboard)/produits/page.js",
+  "/(dashboard)/faq/page": "app/(dashboard)/faq/page.js"
 }
