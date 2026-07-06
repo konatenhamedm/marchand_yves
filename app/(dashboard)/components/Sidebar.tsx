@@ -12,9 +12,10 @@ import {
   User, Tag, CreditCard, Wallet, TrendingUp, DollarSign,
   Truck, ShieldCheck, Phone, Info, FileText, Star,
   Printer, RefreshCw, LogOut, Layers, HelpCircle,
-  ShoppingBag,
+  ShoppingBag, ChevronUp, Check,
 } from 'lucide-react';
 import type { Feature, AccesMagasinPersonnel } from '@/app/types/auth';
+import { useMagasin, type Magasin } from '@/context/MagasinContext';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -26,6 +27,7 @@ interface MenuItem {
   path?: string;
   subItems?: SubItem[];
   isAction?: boolean;       // ex: déconnexion
+  isExternal?: boolean;     // ex: https:// lien externe
   onClick?: () => void;
 }
 interface MenuSection {
@@ -44,7 +46,7 @@ interface SidebarProps {
 // Mapping feature.code → { route, icône }
 // ─────────────────────────────────────────────────────────────
 export const FEATURE_ROUTE_MAP: Record<string, { path: string; icon: React.ReactNode; label?: string }> = {
-  gestionCaisses: { path: '/dashboard', icon: <BarChart2 className="w-4 h-4" />, label: 'Tableau de bord' },
+  gestionCaisses: { path: '/caisses', icon: <Wallet className="w-4 h-4" />, label: 'Caisses' },
   gestionArticles: { path: '/articles', icon: <Package className="w-4 h-4" />, label: 'Articles' },
   gestionProduits: { path: '/produits', icon: <Boxes className="w-4 h-4" />, label: 'Produits' },
   gestionServices: { path: '/services', icon: <Layers className="w-4 h-4" />, label: 'Services' },
@@ -54,6 +56,7 @@ export const FEATURE_ROUTE_MAP: Record<string, { path: string; icon: React.React
   gestionTaxe: { path: '/taxes', icon: <DollarSign className="w-4 h-4" />, label: 'Taxes' },
   gestionModePaiements: { path: '/mode_paiement', icon: <CreditCard className="w-4 h-4" />, label: 'Modes de paiement' },
   gestionVentes: { path: '/ventes', icon: <ShoppingCart className="w-4 h-4" />, label: 'Ventes' },
+  gestionDevis: { path: '/devis', icon: <FileText className="w-4 h-4" />, label: 'Devis' },
   gestionAchatArticles: { path: '/achats', icon: <ShoppingBag className="w-4 h-4" />, label: "Achats d'articles" },
   gestionCommandes: { path: '/commandes', icon: <ClipboardList className="w-4 h-4" />, label: 'Commandes' },
   gestionCharges: { path: '/charges', icon: <TrendingUp className="w-4 h-4" />, label: 'Charges' },
@@ -68,9 +71,8 @@ export const FEATURE_ROUTE_MAP: Record<string, { path: string; icon: React.React
 // ─────────────────────────────────────────────────────────────
 const ADMIN_SECTIONS: MenuSection[] = [
   {
-    section: '',
+    section: 'Administration',
     items: [
-      { title: 'Tableau de bord', icon: <LayoutDashboard className="w-4 h-4" />, path: '/dashboard' },
       {
         title: 'Gestion', icon: <Users className="w-4 h-4" />,
         subItems: [
@@ -129,6 +131,7 @@ function buildFullMerchantSections(onLogout: () => void): MenuSection[] {
     {
       section: 'Activités',
       items: [
+        { title: 'Devis', icon: <FileText className="w-4 h-4" />, path: '/devis' },
         { title: 'Ventes', icon: <ShoppingCart className="w-4 h-4" />, path: '/ventes' },
         { title: "Achats d'articles", icon: <ShoppingBag className="w-4 h-4" />, path: '/achats' },
         { title: 'Commandes', icon: <ClipboardList className="w-4 h-4" />, path: '/commandes' },
@@ -146,7 +149,7 @@ function buildFullMerchantSections(onLogout: () => void): MenuSection[] {
     {
       section: 'Trésorerie',
       items: [
-        { title: 'Caisses', icon: <BarChart2 className="w-4 h-4" />, path: '/dashboard' },
+        { title: 'Caisses', icon: <Wallet className="w-4 h-4" />, path: '/caisses' },
       ],
     },
     {
@@ -156,8 +159,8 @@ function buildFullMerchantSections(onLogout: () => void): MenuSection[] {
         { title: 'FAQ', icon: <HelpCircle className="w-4 h-4" />, path: '/faq' },
         { title: 'Nous contacter', icon: <Phone className="w-4 h-4" />, path: '/contact' },
         { title: 'À propos', icon: <Info className="w-4 h-4" />, path: '/apropos' },
-        { title: 'Conditions générales', icon: <FileText className="w-4 h-4" />, path: '/conditions' },
-        { title: 'Imprimantes', icon: <Printer className="w-4 h-4" />, path: '/imprimantes' },
+        { title: 'Conditions générales', icon: <FileText className="w-4 h-4" />, path: 'https://moomen.pro/conditionsUtilisation/', isExternal: true },
+       // { title: 'Imprimantes', icon: <Printer className="w-4 h-4" />, path: '/imprimantes' },
         {
           title: 'Se déconnecter',
           icon: <LogOut className="w-4 h-4" />,
@@ -227,13 +230,39 @@ function NavItem({
   // Lien direct
   if (!hasChildren && item.path) {
     const active = isActive(item.path);
+
+    if (item.isExternal) {
+      return (
+        <a
+          href={item.path}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={isCollapsed ? item.title : ''}
+          className={`
+            flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150
+            text-white/55 hover:text-white hover:bg-white/8
+            ${isCollapsed ? 'justify-center' : ''}
+          `}
+        >
+          <span className="flex-shrink-0 w-4 h-4">{item.icon}</span>
+          {!isCollapsed && <span className="truncate">{item.title}</span>}
+        </a>
+      );
+    }
+
     return (
       <Link
         href={item.path}
         onClick={() => { if (window.innerWidth < 1024) onToggle(); }}
         title={isCollapsed ? item.title : ''}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${active ? 'bg-[#0052CC] text-white font-medium' : 'text-white/55 hover:text-white hover:bg-white/8'
-          } ${isCollapsed ? 'justify-center' : ''}`}
+        className={`
+          flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150
+          ${active
+            ? 'bg-[#0052CC] text-white font-medium shadow-sm'
+            : 'text-white/55 hover:text-white hover:bg-white/8'
+          }
+          ${isCollapsed ? 'justify-center' : ''}
+        `}
       >
         <span className="flex-shrink-0 w-4 h-4">{item.icon}</span>
         {!isCollapsed && <span className="truncate">{item.title}</span>}
@@ -247,13 +276,14 @@ function NavItem({
       <button
         onClick={() => onMenuToggle(item.title)}
         title={isCollapsed ? item.title : ''}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${parentActive ? 'text-white font-medium' :
-            isOpen ? 'text-white/80' :
-              'text-white/55 hover:text-white hover:bg-white/8'
-          } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+        className={`
+          w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150
+          ${parentActive ? 'text-white font-medium' : isOpen ? 'text-white/80' : 'text-white/55 hover:text-white hover:bg-white/8'}
+          ${isCollapsed ? 'justify-center' : 'justify-between'}
+        `}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <span className="flex-shrink-0 w-4 h-4">{item.icon}</span>
+          <span className={`flex-shrink-0 w-4 h-4 ${parentActive ? 'text-[#0052CC]' : ''}`}>{item.icon}</span>
           {!isCollapsed && <span className="truncate">{item.title}</span>}
         </div>
         {!isCollapsed && (
@@ -268,7 +298,9 @@ function NavItem({
               key={sub.path}
               href={sub.path}
               onClick={() => { if (window.innerWidth < 1024) onToggle(); }}
-              className={`block px-3 py-2 text-[13px] rounded-md transition-all duration-150 ${pathname === sub.path ? 'text-white font-medium bg-[#0052CC]/30' : 'text-white/45 hover:text-white hover:bg-white/6'
+              className={`block px-3 py-2 text-[13px] rounded-md transition-all duration-150 ${pathname === sub.path
+                ? 'text-white font-medium bg-[#0052CC]/25'
+                : 'text-white/45 hover:text-white hover:bg-white/6'
                 }`}
             >
               {sub.title}
@@ -277,6 +309,86 @@ function NavItem({
         </div>
       )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// MagasinSelector — sélecteur de magasin dans la sidebar
+// ─────────────────────────────────────────────────────────────
+function MagasinSelector({ isCollapsed }: { isCollapsed: boolean }) {
+  const { magasin, magasins, selectMagasin, isLoading } = useMagasin();
+  const [open, setOpen] = useState(false);
+
+  if (isCollapsed) {
+    // En mode collapsed : juste l'icône du magasin actif avec tooltip
+    return (
+      <div className="px-2.5 py-2">
+        <div
+          title={magasin?.libelle ?? 'Aucun magasin'}
+          className="w-10 h-10 mx-auto rounded-lg bg-[#0052CC]/20 border border-[#0052CC]/30 flex items-center justify-center cursor-pointer hover:bg-[#0052CC]/30 transition-colors"
+        >
+          <Store className="w-4 h-4 text-[#6EA8FF]" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-2 relative">
+      <p className="text-[9px] font-bold text-white/25 uppercase tracking-widest px-1 mb-1.5">
+        Magasin actif
+      </p>
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={isLoading || magasins.length <= 1}
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#0052CC]/15 border border-[#0052CC]/25 hover:bg-[#0052CC]/25 transition-colors group"
+      >
+        <div className="w-6 h-6 rounded-md bg-[#0052CC]/40 flex items-center justify-center flex-shrink-0">
+          <Store className="w-3.5 h-3.5 text-[#6EA8FF]" />
+        </div>
+        <span className="flex-1 text-left min-w-0">
+          {isLoading ? (
+            <span className="text-xs text-white/30">Chargement...</span>
+          ) : magasin ? (
+            <span className="text-xs font-semibold text-white/90 truncate block">{magasin.libelle}</span>
+          ) : (
+            <span className="text-xs text-white/30 italic">Aucun magasin</span>
+          )}
+        </span>
+        {magasins.length > 1 && (
+          <ChevronDown className={`w-3.5 h-3.5 text-white/40 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {open && magasins.length > 1 && (
+        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-[#0D1E3A] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+          <div className="py-1 max-h-52 overflow-y-auto">
+            {magasins.map(m => (
+              <button
+                key={m.id}
+                onClick={() => { selectMagasin(m); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-xs transition-colors ${m.id === magasin?.id
+                  ? 'bg-[#0052CC]/25 text-white font-semibold'
+                  : 'text-white/65 hover:bg-white/8 hover:text-white'
+                  }`}
+              >
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${m.id === magasin?.id ? 'bg-[#0052CC]' : 'bg-white/10'}`}>
+                  <Store className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate">{m.libelle}</span>
+                  <span className="text-[10px] text-white/40">
+                    {m.pays_devise?.devise?.symbole || (m.devise as any)?.devise?.symbole || m.devise?.symbole || "CFA"}
+                  </span>
+                </div>
+                {m.id === magasin?.id && <Check className="w-3.5 h-3.5 text-[#6EA8FF] ml-auto flex-shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -398,8 +510,34 @@ export default function MoomenProSidebar({
           </div>
         )}
 
+        {/* ── Dashboard — lien épinglé isolé ── */}
+        <div className="px-2 pt-2 pb-1 flex-shrink-0">
+          <Link
+            href="/dashboard"
+            title={isCollapsed ? 'Tableau de bord' : ''}
+            className={`
+              flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+              ${pathname === '/dashboard' || pathname.startsWith('/dashboard/')
+                ? 'bg-[#0052CC] text-white shadow-md shadow-[#0052CC]/30'
+                : 'text-white/70 hover:text-white bg-white/5 hover:bg-[#0052CC]/20 border border-white/8'
+              }
+              ${isCollapsed ? 'justify-center' : ''}
+            `}
+          >
+            <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
+            {!isCollapsed && <span>Tableau de bord</span>}
+          </Link>
+        </div>
+        {/* Séparateur visuel */}
+        <div className="mx-3 mb-1 h-px bg-white/8" />
+
+        {/* ── Sélecteur de magasin (marchands seulement) ── */}
+        {!isAdmin && status === 'authenticated' && (
+          <MagasinSelector isCollapsed={isCollapsed} />
+        )}
+
         {/* ── Navigation ── */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-0">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-1 px-2 custom-scrollbar">
           {status === 'loading' ? (
             <div className="space-y-1 px-1 pt-2">
               {[1, 2, 3, 4, 5].map(i => (
@@ -442,17 +580,17 @@ export default function MoomenProSidebar({
         <div className="flex-shrink-0 border-t border-white/8 p-3">
           {!isCollapsed ? (
             <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-white/5">
-              <div className="w-8 h-8 bg-[#0052CC] rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-[#0052CC] rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
                 <span className="text-white text-xs font-bold">{initials}</span>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-white/90 truncate leading-tight">{displayName}</p>
-                <p className="text-[11px] text-white/40 truncate leading-tight">{roleLibelle || '—'}</p>
+                <p className="text-[11px] text-[#6EA8FF] font-bold uppercase truncate mt-0.5">{roleLibelle || (isAdmin ? 'Admin' : 'Marchand')}</p>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-8 h-8 bg-[#0052CC] rounded-full flex items-center justify-center" title={displayName}>
+              <div className="w-8 h-8 bg-[#0052CC] rounded-full flex items-center justify-center shadow-md" title={displayName}>
                 <span className="text-white text-xs font-bold">{initials}</span>
               </div>
             </div>

@@ -5,15 +5,21 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/axios";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void; data: any; }
-export function Delete({ isOpen, onClose, onSuccess, data }: Props) {
+interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void; data: any; multiple?: boolean; selectedIds?: number[]; }
+export function Delete({ isOpen, onClose, onSuccess, data, multiple = false, selectedIds = [] }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      await apiFetch(`/commandes/${data.id}/delete`, { method: "DELETE" });
-      toast.success("Commande supprimé(e) !"); onSuccess(); onClose();
-    } catch (err: any) { toast.error(err.message || "Erreur"); } finally { setIsSubmitting(false); }
+      if (multiple) {
+        await Promise.all(selectedIds.map(id => apiFetch(`/commandes/${id}/delete`, { method: "DELETE" })));
+        toast.success("Commandes supprimées !");
+      } else {
+        await apiFetch(`/commandes/${data.id}/delete`, { method: "DELETE" });
+        toast.success("Commande supprimée !");
+      }
+      onSuccess(); onClose();
+    } catch (err: any) { toast.error(err.message || "Erreur lors de la suppression"); } finally { setIsSubmitting(false); }
   };
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -25,7 +31,11 @@ export function Delete({ isOpen, onClose, onSuccess, data }: Props) {
           </DialogTitle></DialogHeader>
         </div>
         <div className="p-6 bg-white">
-          <p className="text-slate-600">Voulez-vous supprimer <span className="font-bold text-red-600">{data?.libelle ?? data?.nom ?? data?.id}</span> ?</p>
+          {multiple ? (
+            <p className="text-slate-600">Voulez-vous supprimer les <span className="font-bold text-red-600">{selectedIds.length}</span> commandes sélectionnées ?</p>
+          ) : (
+            <p className="text-slate-600">Voulez-vous supprimer <span className="font-bold text-red-600">{data?.libelle ?? data?.nom ?? data?.id}</span> ?</p>
+          )}
           <p className="text-sm text-slate-400 mt-2 italic">Cette action est irréversible.</p>
         </div>
         <DialogFooter className="p-6 bg-slate-50 flex gap-3">

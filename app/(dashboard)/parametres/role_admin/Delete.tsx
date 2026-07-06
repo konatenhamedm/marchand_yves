@@ -18,22 +18,26 @@ interface DeleteProps {
     onClose: () => void;
     onSuccess: () => void;
     data: any;
+    multiple?: boolean;
+    selectedIds?: number[];
 }
 
-export function Delete({ isOpen, onClose, onSuccess, data }: DeleteProps) {
+export function Delete({ isOpen, onClose, onSuccess, data, multiple = false, selectedIds = [] }: DeleteProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
 
         try {
-            const res = await apiFetch(`/roles/admin/${data.id}/delete`, { method: "DELETE" });
-
-            if (res) {
+            if (multiple) {
+                await Promise.all(selectedIds.map(id => apiFetch(`/roles/admin/${id}/delete`, { method: "DELETE" })));
+                toast.success("Rôles supprimés avec succès !");
+            } else {
+                await apiFetch(`/roles/admin/${data.id}/delete`, { method: "DELETE" });
                 toast.success("Rôle supprimé avec succès !");
-                onSuccess();
-                onClose();
             }
+            onSuccess();
+            onClose();
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Une erreur est survenue");
@@ -57,10 +61,18 @@ export function Delete({ isOpen, onClose, onSuccess, data }: DeleteProps) {
                 </div>
 
                 <div className="p-6 bg-white">
-                    <p className="text-slate-600">
-                        Êtes-vous sûr de vouloir supprimer le rôle admin{" "}
-                        <span className="font-bold text-red-600">{data.libelle}</span> ?
-                    </p>
+                    {multiple ? (
+                        <p className="text-slate-600">
+                            Êtes-vous sûr de vouloir supprimer les{" "}
+                            <span className="font-bold text-red-600">{selectedIds.length}</span>{" "}
+                            rôles sélectionnés ?
+                        </p>
+                    ) : (
+                        <p className="text-slate-600">
+                            Êtes-vous sûr de vouloir supprimer le rôle admin{" "}
+                            <span className="font-bold text-red-600">{data?.libelle}</span> ?
+                        </p>
+                    )}
                     <p className="text-sm text-slate-500 mt-2 italic">
                         Cette action est irréversible.
                     </p>

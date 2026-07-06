@@ -2,85 +2,220 @@
 
 import React, { useEffect, useState } from "react";
 import { ClientOnly } from "@/components/ui/client-only";
-import { ClipboardList } from "lucide-react";
+import {
+    ClipboardList, Store, Filter, Calendar, User, Wallet,
+    Plus, Clock, Truck, CheckCircle2, AlertCircle, Search,
+    Package, ArrowRight, UserCheck, Trash2, Settings
+} from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, SearchBar, DataTable,
-    TableSkeletonRows, EmptyState, TD,
+    TableSkeletonRows, EmptyState, TD, PrimaryButton,
 } from "@/components/ui/page-components";
+import { useMagasin } from "@/context/MagasinContext";
 import { Show } from "./Show";
 import { Delete } from "./Delete";
+import { Add } from "./Add";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { UpdateStatus } from "./UpdateStatus";
+import { UpdateLivraison } from "./UpdateLivraison";
+import { ConvertToVente } from "./ConvertToVente";
+import { toast } from "sonner";
+import { RefreshCw, Zap } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useCurrency } from "@/hooks/useCurrency";
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString("fr-FR") : "—";
-const fmt = (v?: number) => v ? v.toLocaleString("fr-FR") : "0";
-
-const STATUS: Record<string, { label: string; cls: string }> = {
-    livre: { label: "Livré", cls: "bg-green-50 text-green-700" },
-    reporte: { label: "Reporté", cls: "bg-amber-50 text-amber-600" },
-    annule: { label: "Annulé", cls: "bg-red-50 text-red-600" },
-};
 
 export default function CommandesPage() {
+    const { canCreate, canEdit, canDelete } = usePermissions("gestionCommandes");
+    const { formatAmount } = useCurrency();
+    const { magasinId, magasin, isLoading: magasinLoading } = useMagasin();
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
+
+    // Filters state
+    const [filterType, setFilterType] = useState<"all" | "non-livrees" | "livrees">("all");
+    const [filters, setFilters] = useState({
+        date_debut: "",
+        date_fin: "",
+    });
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
-    const [modalType, setModalType] = useState<"view" | "delete" | null>(null);
+    const [modalType, setModalType] = useState<"view" | "delete" | "add" | "status" | "livraison" | "convert" | null>(null);
+    const [isConverting, setIsConverting] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const refreshData = () => {
+        if (!magasinId) return;
         setIsLoading(true);
-        apiFetch("/commandes/magasin")
-            .then((res) => { setData(Array.isArray(res.data) ? res.data : res.data?.data ?? []); setIsLoading(false); })
+
+        let endpoint = `/commandes/all/magasin/${magasinId}`;
+        if (filterType === "non-livrees") endpoint = `/commandes/all/non-livrees/magasin/${magasinId}`;
+        else if (filterType === "livrees") endpoint = `/commandes/all/livrees/magasin/${magasinId}`;
+
+        const params = new URLSearchParams();
+        params.append("per_page", itemsPerPage.toString());
+        params.append("page", currentPage.toString());
+        if (filters.date_debut) params.append("date_debut", filters.date_debut);
+        if (filters.date_fin) params.append("date_fin", filters.date_fin);
+
+        const url = params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
+
+        apiFetch(url)
+            .then((res) => {
+                handleApiResponse(res);
+                setIsLoading(false);
+            })
             .catch(() => setIsLoading(false));
     };
+
+    useEffect(() => {
+        if (magasinId) refreshData();
+    }, [magasinId, filterType]);
 
     const handleOpenModal = (type: typeof modalType, item?: any) => { setModalType(type); if (item) setSelecteditem(item); };
     const handleCloseModal = () => { setModalType(null); setSelecteditem(null); };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter((item) =>
-            searchTerm === "" ||
-            item.client?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.lieu_livraison?.toLowerCase().includes(searchTerm.toLowerCase()))
-        : [];
+    const filteredData = getFilteredData(searchTerm, ["ref_vente", "client.nom", "client.prenom", "lieu_livraison"]);
+    const currentitems = getPaginatedItems(filteredData);
 
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentitems = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) setSelectedIds(currentitems.map((item) => item.id));
+        else setSelectedIds([]);
+    };
 
-    useEffect(() => { refreshData(); }, []);
+    const handleSelectItem = (id: number) => {
+        setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    };
 
-    const COLS = 7;
+    const COLS = 9;
+
+    if (!magasinId && !magasinLoading) {
+        return (
+            <ClientOnly>
+                <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+                    <Store className="w-12 h-12 text-slate-300" />
+                    <p className="text-slate-500 font-medium">Veuillez sélectionner un magasin dans la barre latérale</p>
+                </div>
+            </ClientOnly>
+        );
+    }
+
+    const getStatusBadge = (item: any) => {
+        const status = item.status_commande?.toLowerCase();
+        if (status === "livre") {
+            return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold px-3 py-1 rounded-full uppercase text-[9px] tracking-widest">Livré</Badge>;
+        }
+        if (status === "reporte") {
+            return <Badge className="bg-amber-50 text-amber-700 border-amber-100 font-bold px-3 py-1 rounded-full uppercase text-[9px] tracking-widest">Reporté</Badge>;
+        }
+        if (status === "annule") {
+            return <Badge className="bg-red-50 text-red-700 border-red-100 font-bold px-3 py-1 rounded-full uppercase text-[9px] tracking-widest">Annulé</Badge>;
+        }
+        return <Badge className="bg-blue-50 text-blue-700 border-blue-100 font-bold px-3 py-1 rounded-full uppercase text-[9px] tracking-widest">Prévu</Badge>;
+    };
+
+    const handleConvertToVente = (item: any) => {
+        setSelecteditem(item);
+        setModalType("convert");
+    };
 
     return (
         <ClientOnly>
-            <div className="space-y-5">
-
+            <div className="space-y-6">
                 <PageHeader
                     title="Commandes"
-                    description="Suivi des commandes et livraisons"
-                    count={filteredData.length}
+                    description={`Gestion des livraisons — ${magasin?.libelle ?? "Magasin"}`}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
+                    action={
+                        <div className="flex gap-2">
+                            {selectedIds.length > 0 && canDelete && (
+                                <button onClick={() => { setModalType("delete"); setSelecteditem(null); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors">
+                                    <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+                                </button>
+                            )}
+                            {canCreate && (
+                                <PrimaryButton onClick={() => handleOpenModal("add")}>
+                                    <Plus className="w-4 h-4" />
+                                    Nouvelle Commande
+                                </PrimaryButton>
+                            )}
+                        </div>
+                    }
                 />
+
+                {/* Filter Tabs & Date Filter */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-2">
+                        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1 self-start">
+                            {[
+                                { id: "all", label: "Toutes", icon: ClipboardList },
+                                { id: "non-livrees", label: "Non livrées", icon: Clock },
+                                { id: "livrees", label: "Livrées", icon: Truck },
+                            ].map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setFilterType(tab.id as any)}
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${filterType === tab.id
+                                        ? "bg-white text-[#0052cc] shadow-sm scale-105"
+                                        : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+                                        }`}
+                                >
+                                    <tab.icon className="w-4 h-4" />
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex flex-wrap items-end gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest pl-1">Du</Label>
+                                <Input type="date" value={filters.date_debut} onChange={(e) => setFilters({ ...filters, date_debut: e.target.value })} className="h-10 text-xs rounded-xl border-slate-200 focus:ring-4 focus:ring-[#0052cc]/5 transition-all bg-slate-50/30" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest pl-1">Au</Label>
+                                <Input type="date" value={filters.date_fin} onChange={(e) => setFilters({ ...filters, date_fin: e.target.value })} className="h-10 text-xs rounded-xl border-slate-200 focus:ring-4 focus:ring-[#0052cc]/5 transition-all bg-slate-50/30" />
+                            </div>
+                            <PrimaryButton onClick={refreshData} className="h-10 rounded-xl px-6 text-xs font-black uppercase tracking-widest">
+                                Filtrer
+                            </PrimaryButton>
+                        </div>
+                    </div>
+                </div>
 
                 <SearchBar
                     value={searchTerm}
                     onChange={(v) => { setSearchTerm(v); setCurrentPage(1); }}
-                    placeholder="Rechercher par client ou lieu de livraison..."
+                    placeholder="Filtrer par référence, client ou lieu..."
                     onRefresh={refreshData}
                     isLoading={isLoading}
                 />
 
                 <DataTable
-                    title="Liste des commandes"
-                    titleIcon={<ClipboardList className="w-4 h-4" />}
+                    title="Registre des commandes"
+                    titleIcon={<Package className="w-4 h-4" />}
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
@@ -88,55 +223,135 @@ export default function CommandesPage() {
                 >
                     <table className="w-full">
                         <TableHeaderCustom
-                            items={["#", "Date", "Client", "Montant TTC", "Livraison", "Statut"]}
+                            items={[
+                                /* <input 
+                                    type="checkbox" 
+                                    className="cursor-pointer"
+                                    checked={currentitems.length > 0 && selectedIds.length === currentitems.length} 
+                                    onChange={handleSelectAll} 
+                                /> ,*/
+                                "Référence", "Date Cmd", "Client", "Net à payer", "Lieu Livraison", "Livraison Prévue", "Statut"
+                            ]}
                             afficheAction={true}
-                            actionWidth="80px"
+                            actionWidth="180px"
                         />
                         <tbody>
                             {isLoading ? (
                                 <TableSkeletonRows cols={COLS} />
                             ) : currentitems.length === 0 ? (
-                                <EmptyState message="Aucune commande trouvée" icon={<ClipboardList className="w-10 h-10" />} cols={COLS} />
+                                <EmptyState message="Aucune commande enregistrée" icon={<Package className="w-10 h-10" />} cols={COLS} />
                             ) : (
-                                currentitems.map((item, index) => {
-                                    const s = STATUS[item.status_commande ?? ""] ?? null;
-                                    return (
-                                        <tr key={item.id ?? index} className="hover:bg-slate-50 transition-colors duration-100">
-                                            <td className={TD.muted}>{startIndex + index + 1}</td>
-                                            <td className={TD.base}>{fmtDate(item.date_commande)}</td>
-                                            <td className={TD.bold}>{item.client?.nom ?? <span className="text-slate-300 italic font-normal">Anonyme</span>}</td>
-                                            <td className={TD.mono}>{fmt(item.montant_ttc)}</td>
-                                            <td className={TD.base}>{item.lieu_livraison ?? "—"}</td>
-                                            <td className={TD.base}>
-                                                {s ? (
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.cls}`}>{s.label}</span>
-                                                ) : <span className="text-slate-300 text-xs">En attente</span>}
-                                            </td>
-                                            <td className={TD.action}>
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <button onClick={() => handleOpenModal("view", item)} title="Voir"
-                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#EBF2FF] text-[#0052CC] hover:bg-[#0052CC] hover:text-white transition-all duration-150">
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                    </button>
-                                                    <button onClick={() => handleOpenModal("delete", item)} title="Supprimer"
-                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-150">
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    </button>
+                                currentitems.map((item) => (
+                                    <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100 group">
+                                      {/*   <td className={TD.muted}>
+                                            <input 
+                                                type="checkbox" 
+                                                className="cursor-pointer"
+                                                checked={selectedIds.includes(item.id)} 
+                                                onChange={() => handleSelectItem(item.id)} 
+                                            />
+                                        </td> */}
+                                        <td className={TD.mono}>{item.ref_vente}</td>
+                                        <td className={TD.base}>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-slate-700">{fmtDate(item.date_commande || item.date_vente)}</span>
+                                                <span className="text-[9px] text-slate-400 font-medium font-mono uppercase">ID-{item.id}</span>
+                                            </div>
+                                        </td>
+                                        <td className={TD.bold}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-black uppercase">
+                                                    {item.client?.nom?.substring(0, 2) || "AN"}
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
+                                                <div className="flex flex-col">
+                                                    <span className="text-[13px] font-black text-slate-700 truncate max-w-[120px]">{item.client ? `${item.client.nom}` : "Anonyme"}</span>
+                                                    <span className="text-[10px] text-slate-400 font-medium">{item.client?.tel || "—"}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className={TD.mono}>
+                                            <div className="flex flex-col">
+                                                <span className="text-slate-900 font-black">{formatAmount(item.montant_ttc)}</span>
+                                                <span className="text-[9px] text-green-600 font-bold uppercase">Payé: {formatAmount(item.montant_regle)}</span>
+                                            </div>
+                                        </td>
+                                        <td className={TD.base}>
+                                            <div className="flex items-center gap-1.5 max-w-[150px]">
+                                                <Truck className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                                                <span className="truncate text-slate-600 font-medium">{item.lieu_livraison || "Non spécifié"}</span>
+                                            </div>
+                                        </td>
+                                        <td className={TD.base}>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-orange-600">{fmtDate(item.date_livraison)}</span>
+                                                {item.nom_livreur && <span className="text-[9px] text-slate-400 font-bold flex items-center gap-1"><User className="w-2.5 h-2.5" /> {item.nom_livreur}</span>}
+                                            </div>
+                                        </td>
+                                        <td className={TD.base}>
+                                            {getStatusBadge(item)}
+                                        </td>
+                                        <td className={TD.action}>
+                                            <div className="flex items-center gap-1.5 justify-end">
+                                                <button
+                                                    onClick={() => handleConvertToVente(item)}
+                                                    disabled={isConverting === item.id}
+                                                    title="Convertir en vente"
+                                                    className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                                >
+                                                    {isConverting === item.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                                                </button>
+                                                {item.status_commande?.toLowerCase() !== "livre" && (
+                                                    <button
+                                                        onClick={() => handleOpenModal("livraison", item)}
+                                                        title="Infos livraison"
+                                                        className="p-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all shadow-sm"
+                                                    >
+                                                        <Truck className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => handleOpenModal("status", item)}
+                                                    title="Changer statut"
+                                                    className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                                >
+                                                    <Settings className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleOpenModal("view", item)} className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-800 hover:text-white transition-all shadow-sm">
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </button>
+                                                {canDelete && (
+                                                  <button onClick={() => handleOpenModal("delete", item)} className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
                             )}
                         </tbody>
                     </table>
                 </DataTable>
 
+                {modalType === "add" && <Add isOpen={true} onClose={handleCloseModal} onSuccess={() => refreshData()} />}
+
                 {selecteditem && (
                     <>
                         <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
-                        <Delete isOpen={modalType === "delete"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <UpdateStatus isOpen={modalType === "status"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <UpdateLivraison isOpen={modalType === "livraison"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <ConvertToVente isOpen={modalType === "convert"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
                     </>
+                )}
+                {(selecteditem || (selectedIds.length > 0 && modalType === "delete")) && (
+                    <Delete 
+                        isOpen={modalType === "delete"} 
+                        onClose={handleCloseModal} 
+                        data={selecteditem} 
+                        multiple={!selecteditem && selectedIds.length > 0}
+                        selectedIds={selectedIds}
+                        onSuccess={() => { refreshData(); setSelectedIds([]); }} 
+                    />
                 )}
             </div>
         </ClientOnly>

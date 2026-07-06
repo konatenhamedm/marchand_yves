@@ -18,24 +18,26 @@ interface DeleteProps {
     onClose: () => void;
     onSuccess: () => void;
     data: any;
+    multiple?: boolean;
+    selectedIds?: number[];
 }
 
-export function Delete({ isOpen, onClose, onSuccess, data }: DeleteProps) {
+export function Delete({ isOpen, onClose, onSuccess, data, multiple = false, selectedIds = [] }: DeleteProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleDelete = async () => {
         setIsSubmitting(true);
 
         try {
-            const res = await apiFetch(`/devises/delete/${data.id}`, {
-                method: "DELETE",
-            });
-
-            if (res) {
+            if (multiple) {
+                await Promise.all(selectedIds.map(id => apiFetch(`/devises/delete/${id}`, { method: "DELETE" })));
+                toast.success("Devises supprimées avec succès !");
+            } else {
+                await apiFetch(`/devises/delete/${data.id}`, { method: "DELETE" });
                 toast.success("Devise supprimée avec succès !");
-                onSuccess();
-                onClose();
             }
+            onSuccess();
+            onClose();
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Une erreur est survenue lors de la suppression");
@@ -65,23 +67,38 @@ export function Delete({ isOpen, onClose, onSuccess, data }: DeleteProps) {
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600">
                             <AlertTriangle className="h-8 w-8" />
                         </div>
-                        <div className="space-y-2">
-                            <p className="text-slate-600">
-                                Êtes-vous sûr de vouloir supprimer la devise{" "}
-                                <span className="font-bold text-red-600">{data.code} ({data.symbole})</span> ?
-                            </p>
-                            <p className="text-sm text-slate-400 italic">
-                                Cette action est irréversible et pourrait affecter les transactions utilisant cette devise.
-                            </p>
-                        </div>
-
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 w-full">
-                            <Coins className="h-5 w-5 text-slate-400" />
-                            <div className="text-left">
-                                <p className="text-xs text-slate-400">Code ISO</p>
-                                <p className="font-bold text-slate-700">{data.code}</p>
+                        {multiple ? (
+                            <div className="space-y-2">
+                                <p className="text-slate-600">
+                                    Êtes-vous sûr de vouloir supprimer les{" "}
+                                    <span className="font-bold text-red-600">{selectedIds.length}</span>{" "}
+                                    devises sélectionnées ?
+                                </p>
+                                <p className="text-sm text-slate-400 italic">
+                                    Cette action est irréversible et pourrait affecter les transactions utilisant ces devises.
+                                </p>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div className="space-y-2">
+                                    <p className="text-slate-600">
+                                        Êtes-vous sûr de vouloir supprimer la devise{" "}
+                                        <span className="font-bold text-red-600">{data?.code} ({data?.symbole})</span> ?
+                                    </p>
+                                    <p className="text-sm text-slate-400 italic">
+                                        Cette action est irréversible et pourrait affecter les transactions utilisant cette devise.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 w-full">
+                                    <Coins className="h-5 w-5 text-slate-400" />
+                                    <div className="text-left">
+                                        <p className="text-xs text-slate-400">Code ISO</p>
+                                        <p className="font-bold text-slate-700">{data?.code}</p>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 

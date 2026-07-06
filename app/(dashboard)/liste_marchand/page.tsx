@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, PrimaryButton, SearchBar, DataTable,
@@ -34,9 +35,18 @@ function Avatar({ name }: { name: string }) {
 export default function ListeMarchandPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
     const [modalType, setModalType] = useState<"add" | "edit" | "delete" | "view" | null>(null);
@@ -45,7 +55,7 @@ export default function ListeMarchandPage() {
         setIsLoading(true);
         apiFetch("/marchands/all", { method: "GET" })
             .then((res) => {
-                setData(res.data || res);
+                handleApiResponse(res);
                 setIsLoading(false);
             })
             .catch((err) => {
@@ -64,18 +74,8 @@ export default function ListeMarchandPage() {
         setSelecteditem(null);
     };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter(
-            (item) =>
-                searchTerm === "" ||
-                item.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.prenoms?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.email?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        : [];
-
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentitems = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const filteredData = getFilteredData(searchTerm, ["nom", "prenoms", "email"]);
+    const currentitems = getPaginatedItems(filteredData);
 
     useEffect(() => { refreshData(); }, []);
 
@@ -88,7 +88,7 @@ export default function ListeMarchandPage() {
                 <PageHeader
                     title="Marchands"
                     description="Gestion des marchands de la plateforme"
-                    count={filteredData.length}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
                     action={
                         <PrimaryButton onClick={() => handleOpenModal("add", {})}>
                             <Plus className="w-4 h-4" />
@@ -111,7 +111,7 @@ export default function ListeMarchandPage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />

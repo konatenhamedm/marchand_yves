@@ -2,6 +2,7 @@
 
 import { NextUIProvider } from "@nextui-org/react";
 import { SessionProvider } from "next-auth/react";
+import { Toaster } from "sonner";
 
 export function Providers({
   children,
@@ -12,7 +13,10 @@ export function Providers({
 }) {
   return (
     <SessionProvider session={session}>
-      <NextUIProvider>{children}</NextUIProvider>
+      <NextUIProvider>
+        {children}
+        <Toaster position="top-right" richColors />
+      </NextUIProvider>
     </SessionProvider>
   );
 }

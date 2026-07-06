@@ -2,7 +2,7 @@ import React from "react";
 import { TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface TableHeaderCustomProps {
-  items: string[];
+  items: (string | React.ReactNode)[];
   afficheAction?: boolean;
   actionWidth?: string;
 }

@@ -1,14 +1,29 @@
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 
-export const BASE_URL = "https://dev.moomen.pro/api";
-export const BASE_URL_LAMBDA = "https://dev.moomen.pro/api";
-export const BASE_URL_UPLOAD = "https://dev.moomen.pro/api";
+/**
+ * Helper to show toast only on client side
+ */
+const showErrorMessage = async (message: string) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const { toast } = await import('sonner');
+      toast.error(message);
+    } catch (e) {
+      console.error('Failed to show toast:', e);
+    }
+  }
+};
+
+import { BASE_URL, BASE_URL_LAMBDA, BASE_URL_UPLOAD } from './environment';
+
+export { BASE_URL, BASE_URL_LAMBDA, BASE_URL_UPLOAD };
 
 interface ApiFetchOptions extends RequestInit {
   data?: any;
   provenance?: boolean;
   cookies?: ReadonlyRequestCookies;
   useFormData?: boolean;
+  showToast?: boolean;
 }
 
 export async function apiFetch(
@@ -21,8 +36,10 @@ export async function apiFetch(
     data,
     cookies,
     useFormData = false,
+    showToast = true,
     ...restOptions
   } = options;
+
 
   let token = null;
 
@@ -67,7 +84,7 @@ export async function apiFetch(
   }
 
   const headers: Record<string, string> = {
-    ...restOptions.headers as Record<string, string>,
+    ...(method !== 'GET' ? { 'Content-Type': 'application/json', Accept: 'application/json' } : {}),
   };
 
   if (token) {
@@ -111,10 +128,29 @@ export async function apiFetch(
   }
 
   const baseUrl = provenance ? BASE_URL_LAMBDA : BASE_URL;
+  const finalUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
 
   try {
-    const response = await fetch(`${baseUrl}${url}`, requestOptions);
+    const response = await fetch(finalUrl, requestOptions);
 
+    // Safely get the response text first to avoid double-consumption of the stream
+    const responseText = await response.text();
+    let resData: any = null;
+
+    try {
+      resData = responseText ? JSON.parse(responseText) : null;
+    } catch (e) {
+      console.error('Failed to parse JSON response:', e);
+    }
+
+    // 1. Handle explicit business logic errors (status: false)
+    if (resData && resData.status === false && resData.message) {
+      if (showToast) {
+        showErrorMessage(resData.message);
+      }
+    }
+
+    // 2. Handle HTTP errors (4xx, 5xx)
     if (!response.ok) {
       if (response.status === 401) {
         if (typeof window !== 'undefined') {
@@ -122,12 +158,24 @@ export async function apiFetch(
         }
         throw new Error('Unauthorized');
       }
-      throw new Error(`Error: ${response.statusText}`);
+
+      const errorMsg = resData?.message || `Error: ${response.statusText}`;
+
+      // If we haven't already shown a toast for this message in step 1, show it now
+      if (showToast && (!resData || resData.status !== false)) {
+        showErrorMessage(errorMsg);
+      }
+
+      throw new Error(errorMsg);
     }
 
-    return response.json();
-  } catch (error) {
+    return resData;
+  } catch (error: any) {
     console.error('API fetch error:', error);
+    // If it's a network error (no response at all), we might want to show a toast too
+    if (error.message === 'Failed to fetch' && showToast) {
+      showErrorMessage("Impossible de contacter le serveur. Vérifiez votre connexion.");
+    }
     throw error;
   }
 }

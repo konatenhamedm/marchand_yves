@@ -1,40 +1,29 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { ClientOnly } from '@/components/ui/client-only';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Building2, User, Mail, Phone, Globe, AlertCircle, CheckCircle, X } from 'lucide-react';
+import {
+  Eye, EyeOff, Building2, User, Loader2, Globe, Phone,
+  Mail, Lock, CheckCircle2, Sparkles, ShieldCheck, Gift
+} from 'lucide-react';
 import { apiFetch } from '@/lib/axios';
 import { signIn } from 'next-auth/react';
+import { AuthWrapper } from '@/components/auth/AuthWrapper';
+import Link from 'next/link';
+import { toast } from 'sonner';
 
 interface Pays {
   id: number;
   libelle: string;
-  code: string;
   indicatif: string;
-  actif: boolean;
-}
-
-interface AlertModal {
-  show: boolean;
-  type: 'success' | 'error' | 'warning';
-  title: string;
-  message: string;
 }
 
 export default function CreateAccountPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [pays, setPays] = useState<Pays[]>([]);
   const [loading, setLoading] = useState(false);
-  const [alert, setAlert] = useState<AlertModal>({
-    show: false,
-    type: 'success',
-    title: '',
-    message: ''
-  });
+  const [step] = useState<1 | 2>(1); // Step logic can be expanded if needed
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -42,526 +31,475 @@ export default function CreateAccountPage() {
     denominationEntreprise: '',
     emailEntreprise: '',
     numeroEntreprise: '',
-    pays: ''
+    pays: '',
+    codeParrain: '',
   });
 
   useEffect(() => {
-    const fetchPays = async () => {
-      try {
-        const data = await apiFetch('/pays/actif', { method: 'GET' });
-        setPays(data.data);
-      } catch (error) {
-        console.error('Erreur lors du chargement des pays:', error);
-        showAlert('error', 'Erreur', 'Impossible de charger la liste des pays');
-      }
-    };
-    fetchPays();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    apiFetch('/pays/actif').then(data => setPays(data.data)).catch(console.error);
   }, []);
 
-  const showAlert = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
-    setAlert({ show: true, type, title, message });
-  };
-
-  const closeAlert = () => {
-    setAlert({ ...alert, show: false });
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (formData.password !== formData.confirmPassword) {
-      showAlert('error', 'Erreur de validation', 'Les mots de passe ne correspondent pas');
+      toast.error('Les mots de passe ne correspondent pas');
       return;
     }
-
     if (formData.password.length < 8) {
-      showAlert('error', 'Erreur de validation', 'Le mot de passe doit contenir au moins 8 caractères');
+      toast.error('Mot de passe trop court (min. 8 caractères)');
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Créer le compte
       await apiFetch('/user/create', {
         method: 'POST',
-        data: {
-          ...formData,
-          pays: parseInt(formData.pays)
-        }
+        data: { ...formData, pays: parseInt(formData.pays) },
       });
 
-      // 2. Connexion automatique après création du compte
+      toast.success('Compte entreprise créé avec succès !');
       const result = await signIn('credentials', {
-        login: formData.email,  // ✅ Changé de "email" à "login"
+        login: formData.email,
         password: formData.password,
         redirect: false,
       });
 
-      console.log('Résultat signIn:', result);
-
-      // 3. Gérer le résultat de la connexion
-      if (result?.error) {
-        console.error('Erreur de connexion:', result.error);
-        showAlert('warning', 'Compte créé', 'Votre compte a été créé avec succès. Veuillez vous connecter manuellement.');
-        setTimeout(() => router.push('/login'), 2000);
-        return;
-      }
-
       if (result?.ok) {
-        showAlert('success', 'Succès', 'Compte créé et connexion réussie ! Redirection...');
-        setTimeout(() => {
-          router.push('/dashboard');
-          router.refresh();
-        }, 1500);
+        toast.info('Initialisation du dashboard...');
+        router.push('/dashboard');
+        router.refresh();
       } else {
-        // Cas où result.ok est false mais pas d'erreur explicite
-        showAlert('warning', 'Compte créé', 'Votre compte a été créé. Redirection vers la page de connexion...');
-        setTimeout(() => router.push('/login'), 2000);
+        router.push('/login');
       }
-
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      showAlert('error', 'Erreur de création', error.message || 'Une erreur est survenue lors de la création du compte');
-    } finally {
+    } catch (err: any) {
+      toast.error(err.message || 'Échec lors de la création');
       setLoading(false);
     }
   };
 
   return (
-    <ClientOnly>
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden py-6 px-4 sm:px-6 lg:px-8">
-        {/* Fond dégradé unique turquoise/or */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0052cc] via-[#2d7acc] to-[#8B5CF6]"></div>
-
-        {/* Overlay pour adoucir */}
-        <div className="absolute inset-0 bg-white/5"></div>
-
-        {/* Formes géométriques décoratives */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#0052cc]/20 rounded-full transform translate-x-40 -translate-y-40 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#8B5CF6]/20 rounded-full transform -translate-x-40 translate-y-40 blur-3xl"></div>
-
-        {/* Motifs de points blancs subtils */}
-        <div className="absolute top-20 left-40 w-64 h-64 opacity-20" style={{
-          backgroundImage: 'radial-gradient(circle, white 2px, transparent 2px)',
-          backgroundSize: '25px 25px'
-        }}></div>
-
-        {/* Formes animées douces */}
-        <div className="absolute top-10 right-10 w-96 h-96 bg-white/10 rounded-full filter blur-[120px] animate-blob-slow"></div>
-        <div className="absolute bottom-20 left-1/4 w-80 h-80 bg-[#8B5CF6]/15 rounded-full filter blur-[100px] animate-blob-slow animation-delay-4000"></div>
-
-        {/* Modal d'alerte */}
-        {alert.show && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn">
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={closeAlert}
-            ></div>
-
-            {/* Modal */}
-            <div className="relative bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-6 max-w-md w-full animate-slideUp">
-              {/* Icône et titre */}
-              <div className="flex items-start gap-4 mb-4">
-                <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${alert.type === 'success' ? 'bg-green-100' :
-                    alert.type === 'error' ? 'bg-red-100' :
-                      'bg-yellow-100'
-                  }`}>
-                  {alert.type === 'success' ? (
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                  ) : (
-                    <AlertCircle className={`w-6 h-6 ${alert.type === 'error' ? 'text-red-600' : 'text-yellow-600'
-                      }`} />
-                  )}
-                </div>
-
-                <div className="flex-1">
-                  <h3 className={`text-lg font-semibold mb-1 ${alert.type === 'success' ? 'text-green-800' :
-                      alert.type === 'error' ? 'text-red-800' :
-                        'text-yellow-800'
-                    }`}>
-                    {alert.title}
-                  </h3>
-                  <p className="text-sm text-slate-600">
-                    {alert.message}
-                  </p>
-                </div>
-
-                {/* Bouton fermer */}
-                <button
-                  onClick={closeAlert}
-                  className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Bouton OK */}
-              <div className="flex justify-end">
-                <button
-                  onClick={closeAlert}
-                  className={`px-6 py-2 rounded-lg font-medium text-white transition-all duration-300 ${alert.type === 'success'
-                      ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
-                      : alert.type === 'error'
-                        ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
-                        : 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700'
-                    } shadow-lg hover:shadow-xl transform hover:scale-105`}
-                >
-                  OK
-                </button>
-              </div>
+    <AuthWrapper
+      title="Créer un Compte"
+      subtitle={
+        <span className="na-subtitle">
+          Déjà inscrit ?{' '}
+          <Link href="/login" className="na-login-link">
+            Se connecter →
+          </Link>
+        </span>
+      }
+      imageTitle="Inscription. Croissance. Efficacité."
+      imageSubtitle="Inscrivez votre entreprise en quelques clics et accédez à une gestion simplifiée et automatisée."
+      showBack={true}
+      wide={true}
+    >
+      <div className="na-wrapper">
+        {/* Step Indicator */}
+        <div className="na-steps">
+          <div className={`na-step ${step >= 1 ? 'na-step-active' : ''}`}>
+            <div className="na-step-circle">
+              {step > 1 ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
             </div>
+            <span className="na-step-label">Entreprise</span>
           </div>
-        )}
+          <div className={`na-step-line ${step >= 2 ? 'na-step-line-active' : ''}`} />
+          <div className={`na-step ${step >= 2 ? 'na-step-active' : ''}`}>
+            <div className="na-step-circle">
+              <User className="w-3.5 h-3.5" />
+            </div>
+            <span className="na-step-label">Administrateur</span>
+          </div>
+        </div>
 
-        <div className="max-w-3xl w-full relative z-10">
-          {/* Carte avec effet glassmorphism */}
-          <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-6 sm:p-7 hover:shadow-[0_20px_60px_rgba(83,176,183,0.3)] transition-all duration-500">
+        <form onSubmit={handleSubmit} className="na-form">
 
-            {/* Logo Section */}
-            <div className="flex justify-center mb-3">
-              <div className="relative w-20 h-20 bg-gradient-to-br from-white/80 to-white/60 rounded-full flex items-center justify-center border-3 border-[#0052cc]/30 shadow-lg hover:shadow-xl hover:border-[#8B5CF6]/50 hover:scale-105 transition-all duration-300">
-                <div className="relative w-14 h-14">
-                  <Image
-                    src="/logo.jpeg"
-                    alt="Logo"
-                    fill
-                    className="object-contain"
-                    priority
+          {/* ── Section 1: Entreprise ── */}
+          <div className="na-section">
+            <div className="na-section-header">
+              <Building2 className="w-4 h-4" />
+              <span>Informations Entreprise</span>
+            </div>
+
+            <div className="na-fields">
+              {/* Denomination */}
+              <div className="na-field">
+                <label className="auth-label">Dénomination Sociale</label>
+                <div className="na-input-wrap">
+                  <Building2 className="na-icon" />
+                  <input
+                    name="denominationEntreprise"
+                    required
+                    value={formData.denominationEntreprise}
+                    onChange={handleChange}
+                    className="auth-input"
+                    placeholder="Nom de votre entreprise"
+                  />
+                </div>
+              </div>
+
+              <div className="na-grid-2">
+                {/* Phone */}
+                <div className="na-field">
+                  <label className="auth-label">Téléphone</label>
+                  <div className="na-input-wrap">
+                    <Phone className="na-icon" />
+                    <input
+                      name="numeroEntreprise"
+                      required
+                      value={formData.numeroEntreprise}
+                      onChange={handleChange}
+                      className="auth-input"
+                      placeholder="Numéro de contact"
+                    />
+                  </div>
+                </div>
+
+                {/* Country */}
+                <div className="na-field">
+                  <label className="auth-label">Pays</label>
+                  <div className="na-input-wrap">
+                    <Globe className="na-icon" />
+                    <select
+                      name="pays"
+                      required
+                      value={formData.pays}
+                      onChange={handleChange}
+                      className="auth-input na-select"
+                    >
+                      <option value="" disabled>Sélectionnez</option>
+                      {pays.map((p) => (
+                        <option key={p.id} value={p.id} className="text-black">
+                          {p.libelle}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Code Parrain */}
+              <div className="na-field">
+                <label className="auth-label">Code Parrain / Marchand (Optionnel)</label>
+                <div className="na-input-wrap">
+                  <Gift className="na-icon" />
+                  <input
+                    name="codeParrain"
+                    value={formData.codeParrain}
+                    onChange={handleChange}
+                    className="auth-input"
+                    placeholder="Ex: MOO-XXXXXXXX"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Title Section */}
-            <div className="text-center mb-5">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-[#0052cc] to-[#8B5CF6] bg-clip-text text-transparent mb-1">
-                Créer votre compte
-              </h2>
-              <p className="text-xs text-slate-600 font-light">
-                Inscrivez votre entreprise et commencez dès maintenant
-              </p>
-            </div>
-
-            {/* Form Section */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-
-              {/* Section Informations Entreprise */}
-              <div className="bg-gradient-to-br from-[#0052cc]/5 to-[#8B5CF6]/5 rounded-xl p-4 border border-[#0052cc]/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <Building2 className="h-4 w-4 text-[#0052cc]" />
-                  <h3 className="text-sm font-semibold text-slate-800">Informations de l&apos;entreprise</h3>
-                </div>
-
-                <div className="space-y-3">
-                  {/* Nom de l'entreprise */}
-                  <div>
-                    <label htmlFor="denominationEntreprise" className="block text-xs font-medium text-slate-700 mb-1">
-                      Nom de l&apos;entreprise <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="denominationEntreprise"
-                      name="denominationEntreprise"
-                      type="text"
-                      required
-                      value={formData.denominationEntreprise}
-                      onChange={handleChange}
-                      className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                      placeholder="Ex: Fashion Boutique CI"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Email entreprise */}
-                    <div>
-                      <label htmlFor="emailEntreprise" className="block text-xs font-medium text-slate-700 mb-1">
-                        Email entreprise <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                          <Mail className="h-4 w-4 text-slate-400" />
-                        </div>
-                        <input
-                          id="emailEntreprise"
-                          name="emailEntreprise"
-                          type="email"
-                          required
-                          value={formData.emailEntreprise}
-                          onChange={handleChange}
-                          className="appearance-none rounded-lg relative block w-full pl-9 pr-3 py-2 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                          placeholder="contact@entreprise.com"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Téléphone entreprise */}
-                    <div>
-                      <label htmlFor="numeroEntreprise" className="block text-xs font-medium text-slate-700 mb-1">
-                        Téléphone <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                          <Phone className="h-4 w-4 text-slate-400" />
-                        </div>
-                        <input
-                          id="numeroEntreprise"
-                          name="numeroEntreprise"
-                          type="tel"
-                          required
-                          value={formData.numeroEntreprise}
-                          onChange={handleChange}
-                          className="appearance-none rounded-lg relative block w-full pl-9 pr-3 py-2 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                          placeholder="+225 XX XX XX XX XX"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pays */}
-                  <div>
-                    <label htmlFor="pays" className="block text-xs font-medium text-slate-700 mb-1">
-                      Pays <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <Globe className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <select
-                        id="pays"
-                        name="pays"
-                        required
-                        value={formData.pays}
-                        onChange={handleChange}
-                        className="appearance-none rounded-lg relative block w-full pl-9 pr-8 py-2 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                      >
-                        <option value="">Sélectionnez un pays</option>
-                        {pays.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.libelle} ({p.indicatif})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
-                        <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section Informations Administrateur */}
-              <div className="bg-gradient-to-br from-[#8B5CF6]/5 to-[#0052cc]/5 rounded-xl p-4 border border-[#8B5CF6]/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <User className="h-4 w-4 text-[#8B5CF6]" />
-                  <h3 className="text-sm font-semibold text-slate-800">Informations de l&apos;administrateur</h3>
-                </div>
-
-                <div className="space-y-3">
-                  {/* Email admin */}
-                  <div>
-                    <label htmlFor="email" className="block text-xs font-medium text-slate-700 mb-1">
-                      Email de connexion <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <Mail className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        value={formData.email}
-                        onChange={handleChange}
-                        className="appearance-none rounded-lg relative block w-full pl-9 pr-3 py-2 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                        placeholder="admin@entreprise.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Mot de passe */}
-                    <div>
-                      <label htmlFor="password" className="block text-xs font-medium text-slate-700 mb-1">
-                        Mot de passe <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="password"
-                          name="password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          required
-                          minLength={8}
-                          value={formData.password}
-                          onChange={handleChange}
-                          className="appearance-none rounded-lg relative block w-full px-3 py-2 pr-9 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                          placeholder="Min. 8 caractères"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-[#0052cc] transition-colors duration-300"
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Confirmation mot de passe */}
-                    <div>
-                      <label htmlFor="confirmPassword" className="block text-xs font-medium text-slate-700 mb-1">
-                        Confirmer <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="confirmPassword"
-                          name="confirmPassword"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          required
-                          minLength={8}
-                          value={formData.confirmPassword}
-                          onChange={handleChange}
-                          className="appearance-none rounded-lg relative block w-full px-3 py-2 pr-9 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                          placeholder="Confirmez"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-[#0052cc] transition-colors duration-300"
-                        >
-                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Indication mot de passe */}
-                  <p className="text-xs text-slate-500 flex items-start gap-1">
-                    <svg className="h-3.5 w-3.5 text-[#0052cc] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Le mot de passe doit contenir au moins 8 caractères
-                  </p>
-                </div>
-              </div>
-
-              {/* Bouton de soumission */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="group relative w-full flex justify-center items-center gap-2 py-2.5 px-6 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-[#0052cc] via-[#2d7acc] to-[#8B5CF6] hover:from-[#8B5CF6] hover:via-[#2d7acc] hover:to-[#0052cc] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0052cc] shadow-lg hover:shadow-xl hover:shadow-[#0052cc]/50 transition-all duration-500 transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="relative z-10">{loading ? 'Création en cours...' : 'Créer mon compte'}</span>
-                <svg
-                  className="w-4 h-4 relative z-10 transform group-hover:translate-x-1 transition-transform duration-300"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-
-                {/* Effet de brillance au survol */}
-                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
-              </button>
-
-              {/* Lien retour login */}
-              <div className="text-center pt-3 border-t border-slate-200">
-                <p className="text-xs text-slate-600 mb-1.5">Vous avez déjà un compte ?</p>
-                <a
-                  href="/login"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052cc] hover:text-[#8B5CF6] transition-colors duration-300 group px-3 py-1.5 rounded-lg hover:bg-[#0052cc]/10"
-                >
-                  <svg
-                    className="w-3.5 h-3.5 transform group-hover:-translate-x-1 transition-transform duration-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-                  </svg>
-                  Se connecter
-                </a>
-              </div>
-            </form>
           </div>
 
-          {/* Footer text */}
-          <p className="mt-4 text-center text-xs text-white/90 drop-shadow-md">
-            En créant un compte, vous acceptez nos{' '}
-            <a href="/terms" className="text-white font-semibold hover:text-[#8B5CF6] transition-colors duration-300 underline">
-              Conditions
-            </a>
-            {' '}et{' '}
-            <a href="/privacy" className="text-white font-semibold hover:text-[#8B5CF6] transition-colors duration-300 underline">
-              Politique de confidentialité
-            </a>
-          </p>
-        </div>
+          {/* Divider */}
+          <div className="na-divider">
+            <span className="na-divider-line" />
+            <span className="na-divider-text">
+              <User className="w-3 h-3" />
+              Accès Administrateur
+            </span>
+            <span className="na-divider-line" />
+          </div>
+
+          {/* ── Section 2: Admin ── */}
+          <div className="na-section">
+            <div className="na-fields">
+              {/* Email */}
+              <div className="na-field">
+                <label className="auth-label">Identifiant Principal (Email)</label>
+                <div className="na-input-wrap">
+                  <Mail className="na-icon" />
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="auth-input"
+                    placeholder="Email de connexion"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              <div className="na-grid-2">
+                {/* Password */}
+                <div className="na-field">
+                  <label className="auth-label">Mot de Passe</label>
+                  <div className="na-input-wrap">
+                    <Lock className="na-icon" />
+                    <input
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="auth-input na-pr"
+                      placeholder="Min. 8 caractères"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="na-eye-btn"
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div className="na-field">
+                  <label className="auth-label">Confirmer</label>
+                  <div className="na-input-wrap">
+                    <ShieldCheck className="na-icon" />
+                    <input
+                      name="confirmPassword"
+                      type="password"
+                      required
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      className="auth-input"
+                      placeholder="Confirmer"
+                      autoComplete="new-password"
+                    />
+                    {formData.confirmPassword && (
+                      <span className={`na-match ${
+                        formData.password === formData.confirmPassword ? 'na-match-ok' : 'na-match-no'
+                      }`} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit */}
+          <div className="na-submit-section">
+            <button
+              type="submit"
+              disabled={loading}
+              className="auth-btn-primary"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Sparkles size={15} />
+                  Créer mon Compte Moomen Pro
+                </>
+              )}
+            </button>
+
+            <p className="na-terms">
+              En créant votre compte, vous acceptez nos{' '}
+              <a href="https://moomen.pro/conditionsUtilisation" target='_blank' className="na-terms-link">Conditions Générales</a>
+              {' '}et notre{' '}
+              <a href="https://moomen.pro/politiqueConfidentialite" target='_blank' className="na-terms-link">Politique de Confidentialité</a>.
+            </p>
+          </div>
+        </form>
       </div>
 
-      {/* Styles CSS pour les animations */}
-      <style jsx>{`
-        @keyframes blob-slow {
-          0%, 100% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          25% {
-            transform: translate(30px, -40px) scale(1.05);
-          }
-          50% {
-            transform: translate(-25px, 30px) scale(0.95);
-          }
-          75% {
-            transform: translate(35px, 20px) scale(1.02);
-          }
+      <style jsx global>{`
+        .na-wrapper {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
         }
-        .animate-blob-slow {
-          animation: blob-slow 15s ease-in-out infinite;
+
+        .na-subtitle {
+          font-size: 13px;
+          color: rgba(255,255,255,0.4);
         }
-        .animation-delay-4000 {
-          animation-delay: 4s;
+        .na-login-link {
+          color: #0052CC;
+          font-weight: 700;
+          text-decoration: none;
+          transition: color 0.2s;
         }
-        
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+        .na-login-link:hover { color: #5C8FFF; }
+
+        /* Steps */
+        .na-steps {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+          padding: 0.5rem 0 0.25rem;
         }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
+        .na-step {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          opacity: 0.35;
+          transition: opacity 0.3s;
         }
-        
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        .na-step-active { opacity: 1; }
+        .na-step-circle {
+          width: 28px; height: 28px;
+          border-radius: 50%;
+          background: rgba(0, 82, 204, 0.12);
+          border: 1.5px solid rgba(0, 82, 204, 0.3);
+          display: flex; align-items: center; justify-content: center;
+          color: #0052CC;
+          transition: all 0.3s;
         }
-        .animate-slideUp {
-          animation: slideUp 0.3s ease-out;
+        .na-step-active .na-step-circle {
+          background: rgba(0, 82, 204, 0.2);
+          border-color: #0052CC;
+          box-shadow: 0 0 12px rgba(0, 82, 204, 0.25);
         }
+        .na-step-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: rgba(255,255,255,0.5);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .na-step-active .na-step-label { color: rgba(255,255,255,0.8); }
+        .na-step-line {
+          width: 60px;
+          height: 1px;
+          background: rgba(255,255,255,0.08);
+          margin: 0 0.5rem;
+          transition: background 0.3s;
+        }
+        .na-step-line-active { background: rgba(0, 82, 204, 0.3); }
+
+        /* Form */
+        .na-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.125rem;
+        }
+
+        /* Section */
+        .na-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.875rem;
+          padding: 1.125rem;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 18px;
+          transition: border-color 0.3s;
+        }
+        .na-section:focus-within {
+          border-color: rgba(0, 82, 204, 0.18);
+        }
+
+        .na-section-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: rgba(92, 143, 255, 0.8);
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          padding-bottom: 0.625rem;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .na-fields { display: flex; flex-direction: column; gap: 0.875rem; }
+        .na-grid-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.75rem;
+        }
+        @media (max-width: 640px) { .na-grid-2 { grid-template-columns: 1fr; } }
+
+        /* Field */
+        .na-field { display: flex; flex-direction: column; gap: 0.375rem; }
+        .na-input-wrap { position: relative; display: flex; align-items: center; }
+        .na-icon {
+          position: absolute;
+          left: 0.875rem;
+          width: 0.9375rem;
+          height: 0.9375rem;
+          color: rgba(255,255,255,0.25);
+          pointer-events: none;
+          z-index: 1;
+          transition: color 0.3s;
+        }
+        .na-input-wrap:focus-within .na-icon { color: #0052CC; }
+        .na-select { appearance: none; cursor: pointer; }
+        .na-pr { padding-right: 3rem; }
+        .na-eye-btn {
+          position: absolute;
+          right: 0.875rem;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: rgba(255,255,255,0.25);
+          display: flex;
+          align-items: center;
+          transition: color 0.2s;
+          padding: 0;
+        }
+        .na-eye-btn:hover { color: #0052CC; }
+
+        /* Match */
+        .na-match {
+          position: absolute;
+          right: 0.875rem;
+          width: 7px; height: 7px;
+          border-radius: 50%;
+        }
+        .na-match-ok { background: #0052CC; box-shadow: 0 0 6px #0052CC; }
+        .na-match-no { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+        /* Divider */
+        .na-divider {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .na-divider-line {
+          flex: 1;
+          height: 1px;
+          background: rgba(255,255,255,0.06);
+        }
+        .na-divider-text {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.375rem;
+          font-size: 10px;
+          font-weight: 700;
+          color: rgba(255,255,255,0.25);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          white-space: nowrap;
+        }
+
+        /* Submit */
+        .na-submit-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.875rem;
+        }
+        .na-terms {
+          text-align: center;
+          font-size: 10px;
+          color: rgba(255,255,255,0.22);
+          line-height: 1.6;
+        }
+        .na-terms-link {
+          color: rgba(92, 143, 255, 0.55);
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          transition: color 0.2s;
+        }
+        .na-terms-link:hover { color: #0052CC; }
       `}</style>
-    </ClientOnly>
+    </AuthWrapper>
   );
 }

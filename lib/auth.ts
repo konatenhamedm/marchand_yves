@@ -1,6 +1,6 @@
 import CredentialsProvider from "next-auth/providers/credentials";
 import { NextAuthOptions } from "next-auth";
-import { BASE_URL } from "./axios";
+import { BASE_URL, BASE_URL_LAMBDA } from "./axios";
 import type {
   AdminLoginResponse,
   MarchandLoginResponseItem,
@@ -20,12 +20,19 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.login || !credentials?.password) return null;
 
-        const body = JSON.stringify({ login: credentials.login, password: credentials.password, device_type: "web" });
-        const headers = { "Content-Type": "application/json" };
+        const body = JSON.stringify({ 
+          login: credentials.login, 
+          password: credentials.password, 
+          device_type: "web"
+        });
+        const headers = {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        };
 
         // ── 1. Endpoint Admin (/admins/login) ───────────────────────
         try {
-          const res = await fetch(`${BASE_URL}/auth/login`, { method: "POST", headers, body });
+          const res = await fetch(`${BASE_URL_LAMBDA}/auth/login`, { method: "POST", headers, body });
 
           if (res.ok) {
             const raw = await res.json();
@@ -53,12 +60,12 @@ export const authOptions: NextAuthOptions = {
             }
           }
         } catch (err) {
-          console.warn("[auth] endpoint /admins/login error:", err);
+          // Silent during build
         }
 
         // ── 2. Endpoint Marchand (/auth/login) ─────────────────────
         try {
-          const res = await fetch(`${BASE_URL}/auth/login`, { method: "POST", headers, body });
+          const res = await fetch(`${BASE_URL_LAMBDA}/auth/login`, { method: "POST", headers, body });
 
           if (res.ok) {
             const raw = await res.json();
@@ -96,10 +103,10 @@ export const authOptions: NextAuthOptions = {
             }
           }
         } catch (err) {
-          console.warn("[auth] endpoint /auth/login error:", err);
+          // Silent during build
         }
 
-        console.error("[auth] Both login endpoints failed or returned invalid payload");
+        // Both endpoints failed
         return null;
       },
     }),
@@ -112,6 +119,7 @@ export const authOptions: NextAuthOptions = {
 
   jwt: {
     secret: process.env.NEXTAUTH_SECRET,
+    maxAge: 60 * 24 * 60 * 60,
   },
 
   pages: {
@@ -122,44 +130,60 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     // ── Persiste les champs dans le token JWT ────────────────────
     async jwt({ token, user, trigger, session }) {
-      if (user) {
-        token.id = user.id;
-        token.email = user.email;
-        token.apiToken = (user as any).token;          // clé dédiée évite le conflit avec token.token NextAuth
-        token.nom = (user as any).nom;
-        token.prenoms = (user as any).prenoms;
-        token.kind = (user as any).kind;
-        token.roleCode = (user as any).roleCode;
-        token.roleLibelle = (user as any).roleLibelle;
-        token.features = (user as any).features;
-        token.accesMagasinPersonnel = (user as any).accesMagasinPersonnel;
-      }
+      try {
+        if (user) {
+          token.id = user.id;
+          token.email = user.email;
+          token.apiToken = (user as any).token;
+          token.nom = (user as any).nom;
+          token.prenoms = (user as any).prenoms;
+          token.kind = (user as any).kind;
+          token.roleCode = (user as any).roleCode;
+          token.roleLibelle = (user as any).roleLibelle;
+          token.features = (user as any).features;
+          token.accesMagasinPersonnel = (user as any).accesMagasinPersonnel;
+        }
 
-      // Permet la mise à jour manuelle via useSession().update()
-      if (trigger === "update" && session) {
-        token = { ...token, ...session };
-      }
+        if (trigger === "update" && session) {
+          token = { ...token, ...session };
+        }
 
-      return token;
+        return token;
+      } catch (error) {
+        // Silent JWT errors during build
+        return token;
+      }
     },
 
     // ── Expose les champs dans la session client ─────────────────
     async session({ session, token }) {
-      session.user = {
-        id: token.id as any,
-        email: token.email ?? "",
-        token: token.apiToken as string,           // token API Moomen
-        nom: token.nom as string,
-        prenoms: token.prenoms as string,
-        kind: token.kind as "admin" | "merchant",
-        roleCode: token.roleCode as string,
-        roleLibelle: token.roleLibelle as string,
-        features: (token.features as Feature[]) ?? [],
-        accesMagasinPersonnel: (token.accesMagasinPersonnel as AccesMagasinPersonnel[]) ?? [],
-      } as any;
-      return session;
+      try {
+        session.user = {
+          id: token.id as any,
+          email: token.email ?? "",
+          token: token.apiToken as string,
+          nom: token.nom as string,
+          prenoms: token.prenoms as string,
+          kind: token.kind as "admin" | "merchant",
+          roleCode: token.roleCode as string,
+          roleLibelle: token.roleLibelle as string,
+          features: (token.features as Feature[]) ?? [],
+          accesMagasinPersonnel: (token.accesMagasinPersonnel as AccesMagasinPersonnel[]) ?? [],
+        } as any;
+        return session;
+      } catch (error) {
+        // Silent JWT errors during build
+        return session;
+      }
     },
   },
 
   secret: process.env.NEXTAUTH_SECRET,
+  
+  // Désactiver les logs d'erreur JWT pendant le build
+  logger: {
+    error: () => {},
+    warn: () => {},
+    debug: () => {},
+  },
 };

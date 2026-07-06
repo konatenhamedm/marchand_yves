@@ -18,23 +18,27 @@ interface DeleteProps {
     onClose: () => void;
     onSuccess: () => void;
     data: any;
+    multiple?: boolean;
+    selectedIds?: number[];
     size?: "sm" | "md" | "lg";
 }
 
-export function Delete({ isOpen, onClose, onSuccess, data, size = "md" }: DeleteProps) {
+export function Delete({ isOpen, onClose, onSuccess, data, multiple = false, selectedIds = [], size = "md" }: DeleteProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
 
         try {
-            const res = await apiFetch(`/pays/${data.id}/delete`, { method: "DELETE" });
-
-            if (res) {
+            if (multiple) {
+                await Promise.all(selectedIds.map(id => apiFetch(`/pays/${id}/delete`, { method: "DELETE" })));
+                toast.success("Pays supprimés avec succès !");
+            } else {
+                await apiFetch(`/pays/${data.id}/delete`, { method: "DELETE" });
                 toast.success("Pays supprimé avec succès !");
-                onSuccess();
-                onClose();
             }
+            onSuccess();
+            onClose();
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Une erreur est survenue");
@@ -64,10 +68,18 @@ export function Delete({ isOpen, onClose, onSuccess, data, size = "md" }: Delete
                 </div>
 
                 <div className="p-6 bg-white">
-                    <p className="text-slate-600">
-                        Êtes-vous sûr de vouloir supprimer le pays{" "}
-                        <span className="font-bold text-red-600">{data.libelle}</span> ?
-                    </p>
+                    {multiple ? (
+                        <p className="text-slate-600">
+                            Êtes-vous sûr de vouloir supprimer les{" "}
+                            <span className="font-bold text-red-600">{selectedIds.length}</span>{" "}
+                            pays sélectionnés ?
+                        </p>
+                    ) : (
+                        <p className="text-slate-600">
+                            Êtes-vous sûr de vouloir supprimer le pays{" "}
+                            <span className="font-bold text-red-600">{data?.libelle}</span> ?
+                        </p>
+                    )}
                     <p className="text-sm text-slate-500 mt-2 italic">
                         Cette action est irréversible et peut affecter d'autres données liées.
                     </p>

@@ -18,24 +18,26 @@ interface DeleteProps {
     onClose: () => void;
     onSuccess: () => void;
     data: any;
+    multiple?: boolean;
+    selectedIds?: number[];
 }
 
-export function Delete({ isOpen, onClose, onSuccess, data }: DeleteProps) {
+export function Delete({ isOpen, onClose, onSuccess, data, multiple = false, selectedIds = [] }: DeleteProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleDelete = async () => {
         setIsSubmitting(true);
 
         try {
-            const res = await apiFetch(`/admins/delete/${data.id}`, {
-                method: "DELETE",
-            });
-
-            if (res) {
+            if (multiple) {
+                await Promise.all(selectedIds.map(id => apiFetch(`/admins/delete/${id}`, { method: "DELETE" })));
+                toast.success("Administrateurs supprimés avec succès !");
+            } else {
+                await apiFetch(`/admins/delete/${data.id}`, { method: "DELETE" });
                 toast.success("Administrateur supprimé avec succès !");
-                onSuccess();
-                onClose();
             }
+            onSuccess();
+            onClose();
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Une erreur est survenue lors de la suppression");
@@ -65,25 +67,40 @@ export function Delete({ isOpen, onClose, onSuccess, data }: DeleteProps) {
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600">
                             <AlertTriangle className="h-8 w-8" />
                         </div>
-                        <div className="space-y-2">
-                            <p className="text-slate-600">
-                                Êtes-vous sûr de vouloir supprimer l'administrateur{" "}
-                                <span className="font-bold text-red-600">
-                                    {data.nom} {data.prenoms}
-                                </span> ?
-                            </p>
-                            <p className="text-sm text-slate-400 italic">
-                                Cette action est irréversible. L'utilisateur n'aura plus accès à la plateforme.
-                            </p>
-                        </div>
-
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 w-full">
-                            <User className="h-5 w-5 text-slate-400" />
-                            <div className="text-left">
-                                <p className="text-xs text-slate-400">Email</p>
-                                <p className="font-bold text-slate-700">{data.email}</p>
+                        {multiple ? (
+                            <div className="space-y-2">
+                                <p className="text-slate-600">
+                                    Êtes-vous sûr de vouloir supprimer les{" "}
+                                    <span className="font-bold text-red-600">{selectedIds.length}</span>{" "}
+                                    administrateurs sélectionnés ?
+                                </p>
+                                <p className="text-sm text-slate-400 italic">
+                                    Cette action est irréversible. Ces utilisateurs n'auront plus accès à la plateforme.
+                                </p>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div className="space-y-2">
+                                    <p className="text-slate-600">
+                                        Êtes-vous sûr de vouloir supprimer l'administrateur{" "}
+                                        <span className="font-bold text-red-600">
+                                            {data?.nom} {data?.prenoms}
+                                        </span> ?
+                                    </p>
+                                    <p className="text-sm text-slate-400 italic">
+                                        Cette action est irréversible. L'utilisateur n'aura plus accès à la plateforme.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 w-full">
+                                    <User className="h-5 w-5 text-slate-400" />
+                                    <div className="text-left">
+                                        <p className="text-xs text-slate-400">Email</p>
+                                        <p className="font-bold text-slate-700">{data?.email}</p>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 

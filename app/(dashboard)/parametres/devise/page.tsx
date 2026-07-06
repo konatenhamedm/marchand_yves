@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ClientOnly } from '@/components/ui/client-only';
-import { Plus, Coins, Hash } from "lucide-react";
+import { ClientOnly } from "@/components/ui/client-only";
+import { Plus, Coins, Hash, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, PrimaryButton, SearchBar, DataTable,
@@ -18,24 +19,31 @@ import { Show } from "./Show";
 export default function DevisePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
     const [modalType, setModalType] = useState<"add" | "edit" | "delete" | "view" | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const refreshData = () => {
         setIsLoading(true);
-        apiFetch(`/devises/all?page=${currentPage}`)
+        apiFetch("/paysDevises/all")
             .then((res) => {
-                setData(res.data || res);
+                handleApiResponse(res);
                 setIsLoading(false);
             })
-            .catch((err) => {
-                console.error(err.message);
-                setIsLoading(false);
-            });
+            .catch(() => setIsLoading(false));
     };
 
     const handleOpenModal = (type: typeof modalType, item?: any) => {
@@ -48,21 +56,21 @@ export default function DevisePage() {
         setSelecteditem(null);
     };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter(
-            (item) =>
-                searchTerm === "" ||
-                item.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.symbole?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        : [];
+    const filteredData = getFilteredData(searchTerm, ["code", "symbole"]);
+    const currentitems = getPaginatedItems(filteredData);
 
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentItems = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    useEffect(() => { refreshData(); }, []);
 
-    useEffect(() => { refreshData(); }, [currentPage]);
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) setSelectedIds(currentitems.map((item) => item.id));
+        else setSelectedIds([]);
+    };
 
-    const COLS = 4;
+    const handleSelectItem = (id: number) => {
+        setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    };
+
+    const COLS = 5;
 
     return (
         <ClientOnly>
@@ -71,12 +79,19 @@ export default function DevisePage() {
                 <PageHeader
                     title="Devises"
                     description="Gestion des monnaies et devises"
-                    count={filteredData.length}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
                     action={
-                        <PrimaryButton onClick={() => handleOpenModal("add")}>
-                            <Plus className="w-4 h-4" />
-                            Nouvelle devise
-                        </PrimaryButton>
+                        <div className="flex gap-2">
+                            {selectedIds.length > 0 && (
+                                <button onClick={() => { setModalType("delete"); setSelecteditem(null); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors h-10">
+                                    <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+                                </button>
+                            )}
+                            <PrimaryButton onClick={() => handleOpenModal("add", {})}>
+                                <Plus className="w-4 h-4" />
+                                Nouvelle devise
+                            </PrimaryButton>
+                        </div>
                     }
                 />
 
@@ -94,26 +109,43 @@ export default function DevisePage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
-                            onPageChange={setCurrentPage}
+                            onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
                     }
                 >
                     <table className="w-full">
                         <TableHeaderCustom
-                            items={["Code", "Symbole", "Décimales"]}
+                            items={[
+                                <input 
+                                    type="checkbox" 
+                                    className="cursor-pointer"
+                                    checked={currentitems.length > 0 && selectedIds.length === currentitems.length} 
+                                    onChange={handleSelectAll} 
+                                />,
+                                "#", "Code", "Symbole", "Décimales"
+                            ]}
                             afficheAction={true}
                             actionWidth="100px"
                         />
                         <tbody>
                             {isLoading ? (
                                 <TableSkeletonRows cols={COLS} />
-                            ) : currentItems.length === 0 ? (
+                            ) : currentitems.length === 0 ? (
                                 <EmptyState message="Aucune devise trouvée" icon={<Coins className="w-10 h-10" />} cols={COLS} />
                             ) : (
-                                currentItems.map((item) => (
-                                    <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100">
+                                currentitems.map((item, index) => (
+                                    <tr key={item.id ?? index} className="hover:bg-slate-50 transition-colors duration-100">
+                                        <td className={TD.muted}>
+                                            <input 
+                                                type="checkbox" 
+                                                className="cursor-pointer"
+                                                checked={selectedIds.includes(item.id)} 
+                                                onChange={() => handleSelectItem(item.id)} 
+                                            />
+                                        </td>
+                                        <td className={TD.muted}>{(currentPage - 1) * itemsPerPage + index + 1}</td>
                                         <td className={TD.mono}>{item.code}</td>
                                         <td className={TD.bold}>{item.symbole}</td>
                                         <td className={TD.base}>
@@ -136,17 +168,22 @@ export default function DevisePage() {
                     </table>
                 </DataTable>
 
-                {modalType === "add" && (
-                    <Add isOpen={true} onClose={handleCloseModal} onSuccess={() => { handleCloseModal(); refreshData(); }} />
+                <Add isOpen={modalType === "add"} onClose={handleCloseModal} onSuccess={refreshData} />
+                {selecteditem && (
+                    <>
+                        <Edite isOpen={modalType === "edit"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
+                    </>
                 )}
-                {selecteditem && modalType === "edit" && (
-                    <Edite isOpen={true} onClose={handleCloseModal} data={selecteditem} onSuccess={() => { handleCloseModal(); refreshData(); }} />
-                )}
-                {selecteditem && modalType === "view" && (
-                    <Show isOpen={true} onClose={handleCloseModal} data={selecteditem} />
-                )}
-                {selecteditem && modalType === "delete" && (
-                    <Delete isOpen={true} onClose={handleCloseModal} data={selecteditem} onSuccess={() => { handleCloseModal(); refreshData(); }} />
+                {(selecteditem || (selectedIds.length > 0 && modalType === "delete")) && (
+                    <Delete 
+                        isOpen={modalType === "delete"} 
+                        onClose={handleCloseModal} 
+                        data={selecteditem} 
+                        multiple={!selecteditem && selectedIds.length > 0}
+                        selectedIds={selectedIds}
+                        onSuccess={() => { refreshData(); setSelectedIds([]); }} 
+                    />
                 )}
             </div>
         </ClientOnly>

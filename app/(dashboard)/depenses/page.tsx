@@ -2,79 +2,137 @@
 
 import React, { useEffect, useState } from "react";
 import { ClientOnly } from "@/components/ui/client-only";
-import { Wallet } from "lucide-react";
+import { Wallet, Store, Calendar, Plus, Search, Trash2, Eye, HandCoins, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, SearchBar, DataTable,
-    TableSkeletonRows, EmptyState, TD,
+    TableSkeletonRows, EmptyState, TD, PrimaryButton
 } from "@/components/ui/page-components";
+import { useMagasin } from "@/context/MagasinContext";
 import { Show } from "./Show";
 import { Delete } from "./Delete";
+import { Add } from "./Add";
+import { Paiement } from "./Paiement";
+import { Badge } from "@/components/ui/badge";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useCurrency } from "@/hooks/useCurrency";
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString("fr-FR") : "—";
-const fmt = (v?: number) => v ? v.toLocaleString("fr-FR") : "0";
 
 export default function DepensesPage() {
+    const { canCreate, canEdit, canDelete } = usePermissions("gestionDepenses");
+    const { formatAmount } = useCurrency();
+    const { magasinId, magasin, isLoading: magasinLoading } = useMagasin();
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(8);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
-    const [modalType, setModalType] = useState<"view" | "delete" | null>(null);
+    const [modalType, setModalType] = useState<"view" | "delete" | "add" | "paiement" | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const refreshData = () => {
+        if (!magasinId) return;
         setIsLoading(true);
-        apiFetch("/depenses/magasin")
-            .then((res) => { setData(Array.isArray(res.data) ? res.data : res.data?.data ?? []); setIsLoading(false); })
+        apiFetch(`/depenses/all/magasin/${magasinId}?per_page=${itemsPerPage}&page=${currentPage}`)
+            .then((res) => {
+                handleApiResponse(res);
+                setIsLoading(false);
+            })
             .catch(() => setIsLoading(false));
     };
 
-    const handleOpenModal = (type: typeof modalType, item?: any) => { setModalType(type); if (item) setSelecteditem(item); };
+    const handleOpenModal = (type: typeof modalType, item?: any) => {
+        setModalType(type);
+        if (item) setSelecteditem(item);
+    };
     const handleCloseModal = () => { setModalType(null); setSelecteditem(null); };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter((item) =>
-            searchTerm === "" ||
-            item.charge?.libelle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.commentaire?.toLowerCase().includes(searchTerm.toLowerCase()))
-        : [];
+    const filteredData = getFilteredData(searchTerm, ["charge.libelle", "commentaire"]);
+    const currentitems = getPaginatedItems(filteredData);
 
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentitems = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    useEffect(() => { refreshData(); }, [magasinId, currentPage]);
 
-    useEffect(() => { refreshData(); }, []);
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) setSelectedIds(currentitems.map((item) => item.id));
+        else setSelectedIds([]);
+    };
+
+    const handleSelectItem = (id: number) => {
+        setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    };
 
     const COLS = 7;
 
+    if (!magasinId && !magasinLoading) {
+        return (
+            <ClientOnly>
+                <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+                    <div className="w-20 h-20 rounded-[2.5rem] bg-slate-50 flex items-center justify-center text-slate-300 border border-slate-100 shadow-inner">
+                        <Store className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-slate-800 font-black text-lg uppercase tracking-tight">Aucun Magasin Sélectionné</p>
+                        <p className="text-slate-400 text-sm font-medium">Veuillez choisir un établissement pour voir les dépenses</p>
+                    </div>
+                </div>
+            </ClientOnly>
+        );
+    }
+
     return (
         <ClientOnly>
-            <div className="space-y-5">
-
+            <div className="space-y-6">
                 <PageHeader
-                    title="Dépenses"
-                    description="Saisir et suivre les dépenses effectuées"
-                    count={filteredData.length}
+                    title="Dépenses & Frais"
+                    description={`Gestion des flux de sortie de ${magasin?.libelle || "votre magasin"}`}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
+                    action={
+                        <div className="flex gap-2">
+                            {selectedIds.length > 0 && canDelete && (
+                                <button onClick={() => { setModalType("delete"); setSelecteditem(null); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors">
+                                    <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+                                </button>
+                            )}
+                            {canCreate && (
+                                <PrimaryButton onClick={() => handleOpenModal("add", {})}>
+                                    <Plus className="w-4 h-4" />
+                                    Nouvelle dépense
+                                </PrimaryButton>
+                            )}
+                        </div>
+                    }
                 />
 
                 <SearchBar
                     value={searchTerm}
                     onChange={(v) => { setSearchTerm(v); setCurrentPage(1); }}
-                    placeholder="Rechercher par charge ou commentaire..."
+                    placeholder="Filtrer par type de charge ou commentaire..."
                     onRefresh={refreshData}
                     isLoading={isLoading}
                 />
 
                 <DataTable
-                    title="Liste des dépenses"
+                    title="Registre des décaissements"
                     titleIcon={<Wallet className="w-4 h-4" />}
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
@@ -82,36 +140,87 @@ export default function DepensesPage() {
                 >
                     <table className="w-full">
                         <TableHeaderCustom
-                            items={["#", "Date", "Charge", "Montant", "Réglé", "Crédit"]}
+                            items={[
+                                <input 
+                                    type="checkbox" 
+                                    className="cursor-pointer"
+                                    checked={currentitems.length > 0 && selectedIds.length === currentitems.length} 
+                                    onChange={handleSelectAll} 
+                                />,
+                                "Date", "Type de Charge", "Total", "Statut / Crédit", "Commentaire"
+                            ]}
                             afficheAction={true}
-                            actionWidth="80px"
+                            actionWidth="160px"
                         />
                         <tbody>
                             {isLoading ? (
                                 <TableSkeletonRows cols={COLS} />
                             ) : currentitems.length === 0 ? (
-                                <EmptyState message="Aucune dépense trouvée" icon={<Wallet className="w-10 h-10" />} cols={COLS} />
+                                <EmptyState message="Aucune dépense enregistrée" icon={<Wallet className="w-10 h-10" />} cols={COLS} />
                             ) : (
-                                currentitems.map((item, index) => {
-                                    const regle = (item.montant ?? 0) - (item.montant_credit ?? 0);
+                                currentitems.map((item) => {
+                                    const isCredit = item.montant_credit > 0;
                                     return (
-                                        <tr key={item.id ?? index} className="hover:bg-slate-50 transition-colors duration-100">
-                                            <td className={TD.muted}>{startIndex + index + 1}</td>
-                                            <td className={TD.base}>{fmtDate(item.date_depense)}</td>
-                                            <td className={TD.bold}>{item.charge?.libelle ?? "—"}</td>
-                                            <td className={TD.mono}>{fmt(item.montant)}</td>
-                                            <td className="px-4 py-3.5 text-sm text-green-600 font-semibold border-b border-slate-100">{fmt(regle)}</td>
-                                            <td className={`px-4 py-3.5 text-sm border-b border-slate-100 font-semibold ${item.montant_credit > 0 ? "text-red-500" : "text-slate-300"}`}>{fmt(item.montant_credit)}</td>
+                                        <tr key={item.id} className="hover:bg-slate-50/80 transition-all duration-200 group border-b border-slate-50 last:border-0">
+                                            <td className={TD.muted}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="cursor-pointer"
+                                                    checked={selectedIds.includes(item.id)} 
+                                                    onChange={() => handleSelectItem(item.id)} 
+                                                />
+                                            </td>
+                                            <td className={TD.base}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 shadow-sm group-hover:bg-white group-hover:text-[#0052cc] transition-colors">
+                                                        <Calendar className="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <span className="font-bold text-slate-700">{fmtDate(item.date_depense)}</span>
+                                                </div>
+                                            </td>
+                                            <td className={TD.bold}>
+                                                <div className="flex flex-col">
+                                                    <span className="text-slate-900 tracking-tight">{item.charge?.libelle || "Dépense Diverse"}</span>
+                                                    {item.charge && <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Charge fixe</span>}
+                                                </div>
+                                            </td>
+                                            <td className={TD.base}>
+                                                <span className="text-sm font-black text-slate-900">{formatAmount(item.montant)}</span>
+                                            </td>
+                                            <td className={TD.base}>
+                                                {isCredit ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <Badge className="bg-red-50 text-red-700 border-red-100 font-black px-2 py-0.5 text-[9px] uppercase w-fit tracking-widest">À Crédit</Badge>
+                                                        <span className="text-[10px] text-red-500 font-bold italic">Reste {formatAmount(item.montant_credit)}</span>
+                                                    </div>
+                                                ) : (
+                                                    <Badge className="bg-green-50 text-green-700 border-green-100 font-black px-2 py-0.5 text-[9px] uppercase w-fit tracking-widest">Réglé</Badge>
+                                                )}
+                                            </td>
+                                            <td className={TD.muted}>
+                                                <p className="max-w-[200px] truncate text-[11px] font-medium text-slate-400 uppercase tracking-widest">
+                                                    {item.commentaire || "—"}
+                                                </p>
+                                            </td>
                                             <td className={TD.action}>
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <button onClick={() => handleOpenModal("view", item)} title="Voir"
-                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#EBF2FF] text-[#0052CC] hover:bg-[#0052CC] hover:text-white transition-all duration-150">
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                <div className="flex items-center justify-end gap-2 pr-2">
+                                                    {isCredit && (
+                                                        <button
+                                                            onClick={() => handleOpenModal("paiement", item)}
+                                                            className="p-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white transition-all shadow-sm"
+                                                            title="Solder le crédit"
+                                                        >
+                                                            <HandCoins className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => handleOpenModal("view", item)} className="p-2 rounded-xl bg-[#0052cc]/5 text-[#0052cc] hover:bg-[#0052cc] hover:text-white transition-all shadow-sm">
+                                                        <Eye className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={() => handleOpenModal("delete", item)} title="Supprimer"
-                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-150">
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    {canDelete && (
+                                                      <button onClick={() => handleOpenModal("delete", item)} className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-sm">
+                                                        <Trash2 className="w-4 h-4" />
                                                     </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -122,11 +231,23 @@ export default function DepensesPage() {
                     </table>
                 </DataTable>
 
+                <Add isOpen={modalType === "add"} onClose={handleCloseModal} onSuccess={refreshData} size="lg" />
                 {selecteditem && (
                     <>
-                        <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
-                        <Delete isOpen={modalType === "delete"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} refreshData={refreshData} size="lg" />
+                        <Paiement isOpen={modalType === "paiement"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
                     </>
+                )}
+                {(selecteditem || (selectedIds.length > 0 && modalType === "delete")) && (
+                    <Delete 
+                        isOpen={modalType === "delete"} 
+                        onClose={handleCloseModal} 
+                        data={selecteditem} 
+                        multiple={!selecteditem && selectedIds.length > 0}
+                        selectedIds={selectedIds}
+                        onSuccess={() => { refreshData(); setSelectedIds([]); }} 
+                        size="md" 
+                    />
                 )}
             </div>
         </ClientOnly>

@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { ClientOnly } from '@/components/ui/client-only';
-import { Plus, UserCog, Shield, Mail } from "lucide-react";
+import { Plus, UserCog, Shield, Mail, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, PrimaryButton, SearchBar, DataTable,
@@ -27,17 +28,27 @@ function AdminAvatar({ name }: { name: string }) {
 export default function ListeAdminPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
     const [modalType, setModalType] = useState<"add" | "edit" | "delete" | "view" | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const refreshData = () => {
         setIsLoading(true);
         apiFetch("/admins/all", { method: "GET" })
-            .then((res) => { setData(res.data || res); setIsLoading(false); })
+            .then((res) => { handleApiResponse(res); setIsLoading(false); })
             .catch((err) => { console.error(err.message); setIsLoading(false); });
     };
 
@@ -48,23 +59,21 @@ export default function ListeAdminPage() {
 
     const handleCloseModal = () => { setModalType(null); setSelecteditem(null); };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter(
-            (item) =>
-                searchTerm === "" ||
-                item.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.prenoms?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.role?.libelle?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        : [];
-
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentitems = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const filteredData = getFilteredData(searchTerm, ["nom", "prenoms", "email", "role.libelle"]);
+    const currentitems = getPaginatedItems(filteredData);
 
     useEffect(() => { refreshData(); }, []);
 
-    const COLS = 5;
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) setSelectedIds(currentitems.map((item) => item.id));
+        else setSelectedIds([]);
+    };
+
+    const handleSelectItem = (id: number) => {
+        setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    };
+
+    const COLS = 6;
 
     return (
         <ClientOnly>
@@ -73,12 +82,19 @@ export default function ListeAdminPage() {
                 <PageHeader
                     title="Administrateurs"
                     description="Gestion des utilisateurs administrateurs"
-                    count={filteredData.length}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
                     action={
-                        <PrimaryButton onClick={() => handleOpenModal("add", {})}>
-                            <Plus className="w-4 h-4" />
-                            Nouvel admin
-                        </PrimaryButton>
+                        <div className="flex gap-2">
+                            {selectedIds.length > 0 && (
+                                <button onClick={() => { setModalType("delete"); setSelecteditem(null); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors h-10">
+                                    <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+                                </button>
+                            )}
+                            <PrimaryButton onClick={() => handleOpenModal("add", {})}>
+                                <Plus className="w-4 h-4" />
+                                Nouvel admin
+                            </PrimaryButton>
+                        </div>
                     }
                 />
 
@@ -96,7 +112,7 @@ export default function ListeAdminPage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
@@ -104,7 +120,15 @@ export default function ListeAdminPage() {
                 >
                     <table className="w-full">
                         <TableHeaderCustom
-                            items={["Administrateur", "Email", "Rôle"]}
+                            items={[
+                                <input 
+                                    type="checkbox" 
+                                    className="cursor-pointer"
+                                    checked={currentitems.length > 0 && selectedIds.length === currentitems.length} 
+                                    onChange={handleSelectAll} 
+                                />,
+                                "Administrateur", "Email", "Rôle"
+                            ]}
                             afficheAction={true}
                             actionWidth="100px"
                         />
@@ -116,6 +140,14 @@ export default function ListeAdminPage() {
                             ) : (
                                 currentitems.map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100">
+                                        <td className="px-4 py-3 border-b border-slate-100 w-12 pt-5">
+                                            <input 
+                                                type="checkbox" 
+                                                className="cursor-pointer"
+                                                checked={selectedIds.includes(item.id)} 
+                                                onChange={() => handleSelectItem(item.id)} 
+                                            />
+                                        </td>
                                         {/* Nom */}
                                         <td className="px-4 py-3 border-b border-slate-100">
                                             <div className="flex items-center gap-3">
@@ -163,9 +195,18 @@ export default function ListeAdminPage() {
                 {selecteditem && (
                     <>
                         <Edite isOpen={modalType === "edit"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
-                        <Delete isOpen={modalType === "delete"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
                         <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
                     </>
+                )}
+                {(selecteditem || (selectedIds.length > 0 && modalType === "delete")) && (
+                    <Delete 
+                        isOpen={modalType === "delete"} 
+                        onClose={handleCloseModal} 
+                        data={selecteditem} 
+                        multiple={!selecteditem && selectedIds.length > 0}
+                        selectedIds={selectedIds}
+                        onSuccess={() => { refreshData(); setSelectedIds([]); }} 
+                    />
                 )}
             </div>
         </ClientOnly>

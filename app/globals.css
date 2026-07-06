@@ -201,6 +201,21 @@
   .dark ::-webkit-scrollbar-track { background: #161B22; }
   .dark ::-webkit-scrollbar-thumb { background: #30363D; }
   .dark ::-webkit-scrollbar-thumb:hover { background: #58A6FF; }
+
+  /* Scrollbar fine pour sidebar (invisible/très subtile comme ImmoPlus) */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(0, 82, 204, 0.25);
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 82, 204, 0.55);
+  }
 }
 
 /* ===================================
@@ -215,6 +230,13 @@
   .react-select__menu-portal,
   .react-select__menu-list,
   .react-select__option { z-index: 999999 !important; pointer-events: auto !important; }
+
+  /* Enlever le petit rond/outline bleu sur l'input interne de react-select au focus */
+  input[id^="react-select-"]:focus-visible,
+  [class*="-Input"] input:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
 }
 
 /* ===================================

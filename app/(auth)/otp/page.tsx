@@ -1,560 +1,538 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
-import Image from 'next/image';
+import React, { useRef, useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ClientOnly } from '@/components/ui/client-only';
-import { BASE_URL } from '@/lib/axios';
-import { Clock, Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { BASE_URL_LAMBDA } from '@/lib/axios';
+import { signIn } from 'next-auth/react';
+import {
+  Clock, Loader2, MailCheck, Lock, Eye, EyeOff,
+  CheckCircle2, ShieldCheck, RefreshCw,
+} from 'lucide-react';
+import { AuthWrapper } from '@/components/auth/AuthWrapper';
+import { toast } from 'sonner';
 
-export default function ResetPasswordOTPPage() {
+function ResetPasswordOTPContent() {
   const inputsRef = useRef<HTMLInputElement[]>([]);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const email = searchParams.get('email') || '';
-  const mode = searchParams.get('mode') || 'reset'; // 'reset' ou 'mfa'
-
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'error' | 'success'>('error');
-  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes pour le reset
+  const [timeLeft, setTimeLeft] = useState(600);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [step, setStep] = useState<'otp' | 'newPassword'>('otp'); // Étape actuelle
-  const [token, setToken] = useState(''); // Token OTP
-  const [formData, setFormData] = useState({
-    newPassword: '',
-    confirmPassword: ''
-  });
+  const [step, setStep] = useState<'otp' | 'newPassword'>('otp');
+  const [token, setToken] = useState('');
+  const [filledCount, setFilledCount] = useState(0);
+  const [formData, setFormData] = useState({ newPassword: '', confirmPassword: '' });
 
-  // Récupérer le timer sauvegardé
   useEffect(() => {
     const expiry = localStorage.getItem('reset_password_expiry');
     if (expiry) {
       const diff = Math.floor((+expiry - Date.now()) / 1000);
-      if (diff > 0) {
-        setTimeLeft(diff);
-      } else {
-        const newExpiry = Date.now() + 600 * 1000; // 10 minutes
-        localStorage.setItem('reset_password_expiry', newExpiry.toString());
+      if (diff > 0) setTimeLeft(diff);
+      else {
+        localStorage.setItem('reset_password_expiry', (Date.now() + 600 * 1000).toString());
         setTimeLeft(600);
       }
     } else {
-      const newExpiry = Date.now() + 600 * 1000;
-      localStorage.setItem('reset_password_expiry', newExpiry.toString());
+      localStorage.setItem('reset_password_expiry', (Date.now() + 600 * 1000).toString());
       setTimeLeft(600);
     }
   }, []);
 
-  // Timer
   useEffect(() => {
     if (timeLeft <= 0) return;
     const interval = setInterval(() => {
       setTimeLeft((t) => {
-        if (t <= 1) {
-          localStorage.removeItem('reset_password_expiry');
-          return 0;
-        }
+        if (t <= 1) { localStorage.removeItem('reset_password_expiry'); return 0; }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
   }, [timeLeft]);
 
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // Gestion OTP
-  const handleOtpChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    index: number
-  ) => {
+  const updateFilledCount = () => {
+    setFilledCount(inputsRef.current.filter(i => i?.value).length);
+  };
+
+  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const value = e.target.value.replace(/\D/g, '');
     e.target.value = value;
+    updateFilledCount();
     if (value && index < inputsRef.current.length - 1) {
       inputsRef.current[index + 1]?.focus();
     }
   };
 
-  const handleOtpKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    index: number
-  ) => {
+  const handleOtpKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
     if (e.key === 'Backspace' && !e.currentTarget.value && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }
   };
 
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasteData = e.clipboardData
-      .getData('Text')
-      .replace(/\D/g, '')
-      .slice(0, 6);
-    pasteData.split('').forEach((char, i) => {
-      if (inputsRef.current[i]) inputsRef.current[i].value = char;
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    pasted.split('').forEach((ch, i) => {
+      if (inputsRef.current[i]) inputsRef.current[i].value = ch;
     });
-    if (inputsRef.current[pasteData.length - 1]) {
-      inputsRef.current[pasteData.length - 1].focus();
-    }
+    updateFilledCount();
+    inputsRef.current[Math.min(pasted.length, 3)]?.focus();
   };
 
-  // Vérifier si le token est expiré
   const verifyTokenExpired = async (token: string) => {
     try {
-      const response = await fetch(`${BASE_URL}/reset-password/verify-token-expired`, {
+      const response = await fetch(`${BASE_URL_LAMBDA}/auth/resetPassword/confirmOTP/${encodeURIComponent(email)}/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email,
-          token: token
-        }),
       });
-
-      const data = await response.json();
-      return { expired: !response.ok || data.expired === true, data };
+      return { ok: response.ok };
     } catch (error) {
       console.error('Erreur vérification token:', error);
-      return { expired: true, data: null };
+      return { ok: false };
     }
   };
 
-  // Soumission OTP
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (timeLeft <= 0) {
-      setMessage('Le code a expiré. Veuillez en demander un nouveau.');
-      setMessageType('error');
-      return;
-    }
-
     const otpCode = inputsRef.current.map(i => i.value).join('');
-    if (otpCode.length !== 6) {
-      setMessage('Veuillez entrer les 6 chiffres.');
-      setMessageType('error');
-      return;
-    }
+    if (otpCode.length !== 4) { toast.error('Saisissez le code complet à 4 chiffres'); return; }
 
     setIsLoading(true);
-    setMessage('');
-
     try {
-      // Vérifier si le token n'est pas expiré
-      const { expired, data } = await verifyTokenExpired(otpCode);
+      const { ok } = await verifyTokenExpired(otpCode);
+      if (!ok) throw new Error('Code expiré ou invalide');
 
-      if (expired) {
-        setMessage('Le code a expiré. Veuillez en demander un nouveau.');
-        setMessageType('error');
-        return;
-      }
-
-      // Token valide, passer à l'étape suivante
       setToken(otpCode);
       setStep('newPassword');
-      setMessage('Code vérifié avec succès. Définissez votre nouveau mot de passe.');
-      setMessageType('success');
-
+      toast.success('Code validé ! Configurez votre nouveau mot de passe.');
     } catch (error: any) {
-      setMessage(error.message || 'Erreur de vérification.');
-      setMessageType('error');
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Soumission nouveau mot de passe
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validation
-    if (!formData.newPassword || !formData.confirmPassword) {
-      setMessage('Veuillez remplir tous les champs.');
-      setMessageType('error');
-      return;
-    }
-
-    if (formData.newPassword.length < 8) {
-      setMessage('Le mot de passe doit contenir au moins 8 caractères.');
-      setMessageType('error');
-      return;
-    }
-
     if (formData.newPassword !== formData.confirmPassword) {
-      setMessage('Les mots de passe ne correspondent pas.');
-      setMessageType('error');
+      toast.error('Les mots de passe ne correspondent pas');
+      return;
+    }
+    if (formData.newPassword.length < 8) {
+      toast.error('Le mot de passe doit contenir au moins 8 caractères');
       return;
     }
 
     setIsLoading(true);
-    setMessage('');
-
     try {
-      // Vérifier à nouveau le token avant de reset
-      const { expired } = await verifyTokenExpired(token);
-
-      if (expired) {
-        setMessage('Le code a expiré. Veuillez recommencer la procédure.');
-        setMessageType('error');
-        setStep('otp');
-        return;
-      }
-
-      // Reset du mot de passe
-      const response = await fetch(`${BASE_URL}/reset-password/reset`, {
+      // 1. Appel de l'API de reset finalize
+      const resetResponse = await fetch(`${BASE_URL_LAMBDA}/auth/resetPassword/finalize`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
-          email: email,
-          token: token,
-          newPassword: formData.newPassword
-        }),
+          login: email,
+          password: formData.newPassword,
+          confirmation: formData.confirmPassword
+        })
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Erreur lors de la réinitialisation');
+      if (!resetResponse.ok) {
+        throw new Error('Échec lors de la réinitialisation');
       }
 
-      // Succès
-      setMessage('Mot de passe réinitialisé avec succès ! Redirection vers la connexion...');
-      setMessageType('success');
+      toast.success('Mot de passe mis à jour ! Redirection...');
+      
+      // 2. Connexion directe
+      const result = await signIn('credentials', {
+        login: email,
+        password: formData.newPassword,
+        redirect: false,
+      });
 
-      // Nettoyage
-      localStorage.removeItem('reset_password_expiry');
-
-      // Redirection après 3 secondes
-      setTimeout(() => {
+      if (result?.ok) {
+        router.push('/dashboard');
+        router.refresh();
+      } else {
         router.push('/login');
-      }, 3000);
-
-    } catch (error: any) {
-      setMessage(error.message || 'Erreur lors de la réinitialisation.');
-      setMessageType('error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Renvoyer le code
-  const handleResend = async () => {
-    try {
-      setIsLoading(true);
-      setMessage('');
-
-      const response = await fetch(`${BASE_URL}/reset-password/request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Erreur lors du renvoi');
       }
 
-      // Reset timer
-      const newExpiry = Date.now() + 600 * 1000;
-      localStorage.setItem('reset_password_expiry', newExpiry.toString());
-      setTimeLeft(600);
-
-      // Reset OTP inputs
-      inputsRef.current.forEach(input => {
-        if (input) input.value = '';
-      });
-      inputsRef.current[0]?.focus();
-
-      setMessage('✅ Nouveau code envoyé !');
-      setMessageType('success');
-
     } catch (error: any) {
-      setMessage(error.message || 'Erreur lors du renvoi.');
-      setMessageType('error');
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (message) setMessage('');
-  };
+  const progress = (filledCount / 4) * 100;
 
   return (
-    <ClientOnly>
-      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden p-4">
-        {/* Fond dégradé */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0052cc] via-[#1a66b3] to-[#8B5CF6]"></div>
+    <AuthWrapper
+      title={step === 'otp' ? 'Vérification' : 'Nouveau Mot de Passe'}
+      subtitle={
+        step === 'otp' ? (
+          <span className="otp-subtitle">
+            Code envoyé à{' '}
+            <strong className="otp-email">{email || 'votre email'}</strong>
+          </span>
+        ) : (
+          <span className="otp-subtitle">
+            Choisissez un mot de passe robuste d'au moins 8 caractères.
+          </span>
+        )
+      }
+      imageTitle={step === 'otp' ? 'Identité. Vérifiée.' : 'Sécurisé. Renforcé.'}
+      imageSubtitle="L'accès à votre espace Moomen Pro est protégé par authentification sécurisée."
+      showBack={true}
+    >
+      {step === 'otp' ? (
+        <form onSubmit={handleOtpSubmit} className="otp-form">
 
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-white/5"></div>
-
-        {/* Formes décoratives */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#0052cc]/20 rounded-full transform translate-x-40 -translate-y-40 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#8B5CF6]/20 rounded-full transform -translate-x-40 translate-y-40 blur-3xl"></div>
-
-        <div className="w-full max-w-md relative z-10 my-auto">
-          {/* Carte principale */}
-          <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 p-6 sm:p-8 md:p-10 hover:shadow-[0_20px_60px_rgba(83,176,183,0.3)] transition-all duration-500">
-
-            {/* Logo */}
-            <div className="flex justify-center mb-6">
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 bg-gradient-to-br from-white/80 to-white/60 rounded-full flex items-center justify-center border-4 border-[#0052cc]/30 shadow-lg hover:shadow-xl hover:border-[#8B5CF6]/50 hover:scale-105 transition-all duration-300">
-                <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
-                  <Image
-                    src="/logo.jpeg"
-                    alt="Logo"
-                    fill
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-              </div>
+          {/* OTP Digits */}
+          <div className="otp-inputs-section">
+            <div className="otp-inputs" onPaste={handleOtpPaste}>
+              {[...Array(4)].map((_, i) => (
+                <input
+                  key={i}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  className="otp-digit"
+                  ref={(el) => { if (el) inputsRef.current[i] = el; }}
+                  onChange={(e) => handleOtpChange(e, i)}
+                  onKeyDown={(e) => handleOtpKeyDown(e, i)}
+                  required
+                />
+              ))}
             </div>
 
-            {/* Titre */}
-            <div className="text-center mb-6 sm:mb-8">
-              <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-[#0052cc] to-[#8B5CF6] bg-clip-text text-transparent mb-2">
-                {step === 'otp' ? 'Code de vérification' : 'Nouveau mot de passe'}
-              </h2>
-              <p className="text-sm text-slate-600 font-light">
-                {step === 'otp'
-                  ? `Entrez le code envoyé à ${email || 'votre email'}`
-                  : 'Définissez votre nouveau mot de passe'}
-              </p>
-
-              {/* Timer pour OTP */}
-              {step === 'otp' && (
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0052cc]/10 to-[#8B5CF6]/10 border border-[#0052cc]/30 rounded-full mt-3">
-                  <Clock className="h-4 w-4 text-[#0052cc]" />
-                  <span className={`text-sm font-semibold ${timeLeft <= 60 ? 'text-red-600' : 'text-[#0052cc]'
-                    }`}>
-                    {formatTime(timeLeft)}
-                  </span>
-                </div>
-              )}
+            {/* Progress bar */}
+            <div className="otp-progress">
+              <div
+                className="otp-progress-fill"
+                style={{ width: `${progress}%` }}
+              />
             </div>
 
-            {/* Messages */}
-            {message && (
-              <div className={`mb-4 p-3 rounded-xl border ${messageType === 'success'
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : 'bg-red-50 border-red-200 text-red-700'
-                } animate-fadeIn`}>
-                <p className="text-sm text-center">{message}</p>
-              </div>
-            )}
-
-            {/* Étape OTP */}
-            {step === 'otp' && (
-              <form onSubmit={handleOtpSubmit} className="space-y-6">
-                {/* Inputs OTP */}
-                <div className="flex flex-col items-center">
-                  <div className="flex justify-center gap-2 mb-6">
-                    {[...Array(6)].map((_, i) => (
-                      <input
-                        key={i}
-                        type="text"
-                        maxLength={1}
-                        inputMode="numeric"
-                        className="w-12 h-12 sm:w-14 sm:h-14 text-center text-xl font-semibold border-2 border-[#0052cc]/30 rounded-xl bg-white/70 text-slate-900 focus:border-[#0052cc] focus:ring-2 focus:ring-[#0052cc]/50 focus:outline-none focus:bg-white transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50"
-                        ref={(el) => {
-                          if (el) inputsRef.current[i] = el;
-                        }}
-                        onChange={(e) => handleOtpChange(e, i)}
-                        onKeyDown={(e) => handleOtpKeyDown(e, i)}
-                        onPaste={handleOtpPaste}
-                        disabled={isLoading || timeLeft <= 0}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Renvoyer */}
-                  <div className="text-center space-y-2">
-                    <p className="text-sm text-slate-600">
-                      Vous n'avez pas reçu le code ?
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleResend}
-                      disabled={isLoading || timeLeft > 540} // Ne peut renvoyer qu'après 1 minute
-                      className="inline-flex items-center gap-2 text-sm font-semibold text-[#0052cc] hover:text-[#8B5CF6] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg hover:bg-[#0052cc]/10"
-                    >
-                      <Mail className="h-4 w-4" />
-                      Renvoyer le code
-                    </button>
-                  </div>
-                </div>
-
-                {/* Bouton soumission */}
-                <button
-                  type="submit"
-                  disabled={isLoading || timeLeft <= 0}
-                  className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-[#0052cc] via-[#1a66b3] to-[#8B5CF6] hover:from-[#8B5CF6] hover:via-[#1a66b3] hover:to-[#0052cc] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0052cc] shadow-lg hover:shadow-xl hover:shadow-[#0052cc]/50 transition-all duration-500 transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  <span className="relative z-10">
-                    {isLoading ? 'Vérification...' : 'Vérifier le code'}
-                  </span>
-                  <svg
-                    className="w-5 h-5 relative z-10 transform group-hover:translate-x-1 transition-transform duration-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                  </svg>
-                  <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
-                </button>
-              </form>
-            )}
-
-            {/* Étape nouveau mot de passe */}
-            {step === 'newPassword' && (
-              <form onSubmit={handlePasswordSubmit} className="space-y-6">
-                {/* Nouveau mot de passe */}
-                <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 mb-2">
-                    Nouveau mot de passe
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-[#1a66b3]" />
-                    </div>
-                    <input
-                      id="newPassword"
-                      name="newPassword"
-                      type={showPassword ? 'text' : 'password'}
-                      value={formData.newPassword}
-                      onChange={handleFormChange}
-                      disabled={isLoading}
-                      className="appearance-none rounded-xl relative block w-full px-12 py-3 pr-12 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white focus:z-10 text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="Minimum 8 caractères"
-                      minLength={8}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#0052cc] transition-colors duration-300"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Confirmation mot de passe */}
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-2">
-                    Confirmer le mot de passe
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-[#1a66b3]" />
-                    </div>
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={formData.confirmPassword}
-                      onChange={handleFormChange}
-                      disabled={isLoading}
-                      className="appearance-none rounded-xl relative block w-full px-12 py-3 pr-12 border border-[#0052cc]/30 bg-white/70 backdrop-blur-sm placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/50 focus:border-[#0052cc] focus:bg-white focus:z-10 text-sm transition-all duration-300 shadow-sm hover:shadow-md hover:border-[#0052cc]/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="Retapez le mot de passe"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#0052cc] transition-colors duration-300"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Indications */}
-                <div className="text-xs text-slate-500 space-y-1">
-                  <p>• Le mot de passe doit contenir au moins 8 caractères</p>
-                  <p>• Assurez-vous que les deux mots de passe correspondent</p>
-                </div>
-
-                {/* Boutons */}
-                <div className="flex flex-col gap-4">
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-[#0052cc] via-[#1a66b3] to-[#8B5CF6] hover:from-[#8B5CF6] hover:via-[#1a66b3] hover:to-[#0052cc] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0052cc] shadow-lg hover:shadow-xl hover:shadow-[#0052cc]/50 transition-all duration-500 transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                  >
-                    <span className="relative z-10">
-                      {isLoading ? 'Traitement...' : 'Réinitialiser le mot de passe'}
-                    </span>
-                    <svg
-                      className="w-5 h-5 relative z-10 transform group-hover:translate-x-1 transition-transform duration-300"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setStep('otp')}
-                    disabled={isLoading}
-                    className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-[#0052cc]/30 text-sm font-semibold rounded-xl text-[#0052cc] bg-white/70 hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0052cc] shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <ArrowLeft className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform duration-300" />
-                    <span className="relative z-10">Retour au code</span>
-                  </button>
-                </div>
-              </form>
-            )}
+            <p className="otp-hint">
+              {filledCount === 0
+                ? 'Saisissez ou collez votre code'
+                : filledCount < 4
+                  ? `${4 - filledCount} chiffre${4 - filledCount > 1 ? 's' : ''} restant${4 - filledCount > 1 ? 's' : ''}`
+                  : '✓ Code complet — prêt à valider'}
+            </p>
           </div>
 
-          {/* Footer */}
-          <p className="mt-6 text-center text-xs text-white/90 drop-shadow-md">
-            Vous rencontrez des problèmes ?{' '}
-            <a href="mailto:support@batiflow.com" className="text-white font-semibold hover:text-[#8B5CF6] transition-colors duration-300 underline">
-              Contactez le support
-            </a>
-          </p>
-        </div>
-      </div>
+          {/* Timer */}
+          <div className={`otp-timer ${timeLeft < 60 ? 'otp-timer-urgent' : ''}`}>
+            <Clock size={15} className="otp-timer-icon" />
+            <span className="otp-timer-label">Expire dans</span>
+            <span className="otp-timer-value">{formatTime(timeLeft)}</span>
+          </div>
 
-      {/* Styles CSS */}
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          {/* Resend */}
+          <div className="otp-resend">
+            <p className="otp-resend-text">Code non reçu ?</p>
+            <button type="button" className="otp-resend-btn" onClick={() => {
+              // Optionnel: ajouter la logique de renvoi ici
+              toast.info('Procédure de renvoi en cours...');
+            }}>
+              <RefreshCw size={13} />
+              Renvoyer le code
+            </button>
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={isLoading || timeLeft <= 0 || filledCount < 4}
+            className="auth-btn-primary"
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <ShieldCheck size={16} />
+                Valider le Code
+              </>
+            )}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handlePasswordSubmit} className="otp-pw-form">
+          {/* Success indicator */}
+          <div className="otp-verified-badge">
+            <CheckCircle2 className="w-4 h-4 text-[#0052CC]" />
+            <span>Identité vérifiée — définissez votre nouveau mot de passe</span>
+          </div>
+
+          {/* New Password */}
+          <div className="otp-pw-field">
+            <label className="auth-label">Nouveau Mot de Passe</label>
+            <div className="otp-pw-input-wrap">
+              <Lock className="otp-pw-icon" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={formData.newPassword}
+                onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                className="auth-input"
+                placeholder="Min. 8 caractères"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="otp-pw-eye"
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Confirm Password */}
+          <div className="otp-pw-field">
+            <label className="auth-label">Confirmer le Mot de Passe</label>
+            <div className="otp-pw-input-wrap">
+              <Lock className="otp-pw-icon" />
+              <input
+                type="password"
+                required
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                className="auth-input"
+                placeholder="Répétez votre mot de passe"
+                autoComplete="new-password"
+              />
+              {formData.confirmPassword && (
+                <span className={`otp-match-dot ${
+                  formData.newPassword === formData.confirmPassword ? 'match-ok' : 'match-no'
+                }`} />
+              )}
+            </div>
+          </div>
+
+          {/* Submit */}
+          <button type="submit" disabled={isLoading} className="auth-btn-primary">
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <ShieldCheck size={16} />
+                Sécuriser mon Compte
+              </>
+            )}
+          </button>
+        </form>
+      )}
+
+      <style jsx global>{`
+        .otp-form, .otp-pw-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.375rem;
         }
-        
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
+
+        .otp-subtitle { font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 450; }
+        .otp-email { color: #0052CC; font-weight: 700; }
+
+        /* OTP Inputs Section */
+        .otp-inputs-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .otp-inputs {
+          display: flex;
+          gap: 0.625rem;
+          justify-content: center;
+        }
+        .otp-digit {
+          width: 100%;
+          max-width: 52px;
+          height: 60px;
+          text-align: center;
+          font-size: 1.5rem;
+          font-weight: 900;
+          background: rgba(255,255,255,0.04);
+          border: 1.5px solid rgba(255,255,255,0.1);
+          border-radius: 14px;
+          color: #0052CC;
+          outline: none;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          font-family: 'Inter', monospace;
+          letter-spacing: 0;
+          caret-color: #0052CC;
+        }
+        .otp-digit:focus {
+          border-color: #0052CC;
+          background: rgba(0, 82, 204, 0.08);
+          box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.15), 0 4px 12px rgba(0,0,0,0.2);
+          transform: scale(1.06) translateY(-2px);
+        }
+        .otp-digit:not(:placeholder-shown) {
+          border-color: rgba(0, 82, 204, 0.4);
+          background: rgba(0, 82, 204, 0.05);
+        }
+
+        /* Progress */
+        .otp-progress {
+          height: 3px;
+          border-radius: 100px;
+          background: rgba(255,255,255,0.06);
+          overflow: hidden;
+        }
+        .otp-progress-fill {
+          height: 100%;
+          border-radius: 100px;
+          background: linear-gradient(90deg, #0052CC, #5C8FFF);
+          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .otp-hint {
+          text-align: center;
+          font-size: 11px;
+          color: rgba(255,255,255,0.25);
+          font-weight: 500;
+          font-style: italic;
+        }
+
+        /* Timer */
+        .otp-timer {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          padding: 0.625rem 1rem;
+          border-radius: 100px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.07);
+          font-size: 12px;
+          color: rgba(255,255,255,0.6);
+          font-weight: 600;
+          transition: all 0.3s;
+        }
+        .otp-timer-urgent {
+          background: rgba(239,68,68,0.08);
+          border-color: rgba(239,68,68,0.2);
+          color: #ef4444;
+        }
+        .otp-timer-icon { color: #0052CC; }
+        .otp-timer-urgent .otp-timer-icon {
+          color: #ef4444;
+          animation: pulse 1s ease-in-out infinite;
+        }
+        .otp-timer-label { color: rgba(255,255,255,0.35); }
+        .otp-timer-value {
+          font-variant-numeric: tabular-nums;
+          font-weight: 800;
+          font-size: 1rem;
+          letter-spacing: -0.02em;
+          color: inherit;
+        }
+
+        /* Resend */
+        .otp-resend {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.375rem;
+        }
+        .otp-resend-text {
+          font-size: 11px;
+          color: rgba(255,255,255,0.25);
+          font-style: italic;
+        }
+        .otp-resend-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.375rem;
+          font-size: 12px;
+          font-weight: 700;
+          color: rgba(0, 82, 204, 0.7);
+          background: none;
+          border: none;
+          cursor: pointer;
+          transition: color 0.2s, gap 0.2s;
+          padding: 0;
+          font-family: inherit;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+        .otp-resend-btn:hover { color: #0052CC; gap: 0.5rem; }
+
+        /* Verified Badge */
+        .otp-verified-badge {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          border-radius: 12px;
+          background: rgba(0, 82, 204, 0.07);
+          border: 1px solid rgba(0, 82, 204, 0.2);
+          color: rgba(0, 82, 204, 0.8);
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        /* PW Fields */
+        .otp-pw-field {
+          display: flex;
+          flex-direction: column;
+          gap: 0.375rem;
+        }
+        .otp-pw-input-wrap {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+        .otp-pw-icon {
+          position: absolute;
+          left: 1rem;
+          width: 1rem;
+          height: 1rem;
+          color: rgba(255,255,255,0.25);
+          pointer-events: none;
+          z-index: 1;
+        }
+        .otp-pw-eye {
+          position: absolute;
+          right: 1rem;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: rgba(255,255,255,0.3);
+          display: flex;
+          align-items: center;
+          transition: color 0.2s;
+        }
+        .otp-pw-eye:hover { color: #0052CC; }
+
+        /* Match dot */
+        .otp-match-dot {
+          position: absolute;
+          right: 1rem;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
+        .match-ok { background: #0052CC; box-shadow: 0 0 8px #0052CC; }
+        .match-no { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.1); }
         }
       `}</style>
-    </ClientOnly>
+    </AuthWrapper>
+  );
+}
+
+export default function ResetPasswordOTPPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0A1628]" />}>
+      <ResetPasswordOTPContent />
+    </Suspense>
   );
 }

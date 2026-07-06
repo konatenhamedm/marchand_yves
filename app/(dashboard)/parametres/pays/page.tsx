@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { ClientOnly } from '@/components/ui/client-only';
-import { Plus, Globe } from "lucide-react";
+import { Plus, Globe, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, PrimaryButton, SearchBar, DataTable,
@@ -18,18 +19,28 @@ import { Show } from "./Show";
 export default function PaysPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
     const [modalType, setModalType] = useState<"add" | "edit" | "delete" | "view" | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const refreshData = () => {
         setIsLoading(true);
         apiFetch("/pays/all")
             .then((res) => {
-                setData(res.data || res);
+                handleApiResponse(res);
                 setIsLoading(false);
             })
             .catch((err) => {
@@ -48,21 +59,21 @@ export default function PaysPage() {
         setSelecteditem(null);
     };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter(
-            (item) =>
-                searchTerm === "" ||
-                item.libelle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.code?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        : [];
-
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentitems = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const filteredData = getFilteredData(searchTerm, ["libelle", "code"]);
+    const currentitems = getPaginatedItems(filteredData);
 
     useEffect(() => { refreshData(); }, []);
 
-    const COLS = 5;
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) setSelectedIds(currentitems.map((item) => item.id));
+        else setSelectedIds([]);
+    };
+
+    const handleSelectItem = (id: number) => {
+        setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    };
+
+    const COLS = 6;
 
     return (
         <ClientOnly>
@@ -71,12 +82,19 @@ export default function PaysPage() {
                 <PageHeader
                     title="Pays"
                     description="Gestion des pays de la plateforme"
-                    count={filteredData.length}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
                     action={
-                        <PrimaryButton onClick={() => handleOpenModal("add", {})}>
-                            <Plus className="w-4 h-4" />
-                            Nouveau pays
-                        </PrimaryButton>
+                        <div className="flex gap-2">
+                            {selectedIds.length > 0 && (
+                                <button onClick={() => { setModalType("delete"); setSelecteditem(null); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors h-10">
+                                    <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+                                </button>
+                            )}
+                            <PrimaryButton onClick={() => handleOpenModal("add", {})}>
+                                <Plus className="w-4 h-4" />
+                                Nouveau pays
+                            </PrimaryButton>
+                        </div>
                     }
                 />
 
@@ -94,7 +112,7 @@ export default function PaysPage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
@@ -102,7 +120,15 @@ export default function PaysPage() {
                 >
                     <table className="w-full">
                         <TableHeaderCustom
-                            items={["#", "Code", "Libellé", "Taille Phone"]}
+                            items={[
+                                <input 
+                                    type="checkbox" 
+                                    className="cursor-pointer"
+                                    checked={currentitems.length > 0 && selectedIds.length === currentitems.length} 
+                                    onChange={handleSelectAll} 
+                                />,
+                                "#", "Code", "Libellé", "Taille Phone"
+                            ]}
                             afficheAction={true}
                             actionWidth="100px"
                         />
@@ -114,7 +140,15 @@ export default function PaysPage() {
                             ) : (
                                 currentitems.map((item, index) => (
                                     <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100">
-                                        <td className={TD.muted}>{startIndex + index + 1}</td>
+                                        <td className={TD.muted}>
+                                            <input 
+                                                type="checkbox" 
+                                                className="cursor-pointer"
+                                                checked={selectedIds.includes(item.id)} 
+                                                onChange={() => handleSelectItem(item.id)} 
+                                            />
+                                        </td>
+                                        <td className={TD.muted}>{(currentPage - 1) * itemsPerPage + index + 1}</td>
                                         <td className={TD.mono}>{item.code}</td>
                                         <td className={TD.bold + " capitalize"}>{item.libelle}</td>
                                         <td className={TD.base}>{item.taille_phone}</td>
@@ -136,9 +170,18 @@ export default function PaysPage() {
                 {selecteditem && (
                     <>
                         <Edite isOpen={modalType === "edit"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
-                        <Delete isOpen={modalType === "delete"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
                         <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
                     </>
+                )}
+                {(selecteditem || (selectedIds.length > 0 && modalType === "delete")) && (
+                    <Delete 
+                        isOpen={modalType === "delete"} 
+                        onClose={handleCloseModal} 
+                        data={selecteditem} 
+                        multiple={!selecteditem && selectedIds.length > 0}
+                        selectedIds={selectedIds}
+                        onSuccess={() => { refreshData(); setSelectedIds([]); }} 
+                    />
                 )}
             </div>
         </ClientOnly>

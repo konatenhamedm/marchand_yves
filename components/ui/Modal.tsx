@@ -13,7 +13,7 @@ interface ModalProps {
   children: ReactNode;
   size?: "sm" | "md" | "lg" | "xl" | "full" | "2xl";
   footer?: ReactNode;
-  variant?: "default" | "gradient" | "light";
+  variant?: "default" | "gradient" | "light" | "danger";
 }
 
 export const Modal = ({
@@ -35,60 +35,54 @@ export const Modal = ({
     full: "!max-w-[95vw] w-[95vw]",
   };
 
-  // Variantes de header avec couleurs Batiflow
+  // Couleur unique pour tous les headers — #0052CC (bleu Moomen)
   const headerVariants = {
-    default: "bg-[#0052cc] text-white",
-    gradient: "bg-gradient-to-r from-[#0052cc] via-[#1a66b3] to-[#8B5CF6] text-white",
-    light: "bg-gradient-to-r from-batiflow-ice to-transparent text-batiflow-marine border-b-2 border-[#0052cc]",
+    default: "bg-[#0052CC] text-white",
+    gradient: "bg-[#0052CC] text-white",
+    light: "bg-[#0052CC] text-white",
+    danger: "bg-red-500 text-white",
   };
 
   const descriptionVariants = {
-    default: "text-white/80",
-    gradient: "text-white/90",
-    light: "text-batiflow-primary",
+    default: "text-white/75",
+    gradient: "text-white/75",
+    light: "text-white/75",
+    danger: "text-white/75",
   };
 
   const closeButtonVariants = {
     default: "[&>button]:text-white [&>button]:hover:text-white/80 [&>button]:hover:bg-white/20",
     gradient: "[&>button]:text-white [&>button]:hover:text-white/80 [&>button]:hover:bg-white/20",
-    light: "[&>button]:text-batiflow-primary [&>button]:hover:text-batiflow-marine [&>button]:hover:bg-batiflow-sky",
+    light: "[&>button]:text-white [&>button]:hover:text-white/80 [&>button]:hover:bg-white/20",
+    danger: "[&>button]:text-white [&>button]:hover:text-white/80 [&>button]:hover:bg-white/20",
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent 
+      <DialogContent
         className={cn(
           sizeClasses[size],
-          // Toujours utiliser flex col pour permettre le scroll
           "flex flex-col p-0",
-          // Hauteur maximale responsive
           "max-h-[90vh] sm:max-h-[85vh]",
-          // Bordure et ombre Batiflow
-          "border-2 border-batiflow-sky shadow-2xl shadow-[#0052cc]/20",
-          // Bouton close adapté
+          "border border-slate-200 shadow-2xl shadow-[#0052CC]/15",
           closeButtonVariants[variant],
-          // ✅ Z-INDEX : Passer au-dessus de la navbar (z-[110])
           "z-[120]",
-          // ✅ Overlay/Backdrop au-dessus de la navbar aussi
           "data-[state=open]:z-[120]"
         )}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* Header - FIXE en haut avec couleurs Batiflow */}
+        {/* Header — couleur unique #0052CC */}
         <div className={cn(
-          "rounded-t-lg p-4 sm:p-6 flex-shrink-0",
+          "rounded-t-lg px-5 py-4 flex-shrink-0",
           headerVariants[variant]
         )}>
           <DialogHeader>
-            <DialogTitle className={cn(
-              "text-base sm:text-lg font-bold",
-              variant === "light" ? "text-batiflow-marine" : "text-white"
-            )}>
+            <DialogTitle className="text-base sm:text-lg font-bold text-white">
               {title}
             </DialogTitle>
             {description && (
               <DialogDescription className={cn(
-                "text-sm mt-1.5",
+                "text-sm mt-1",
                 descriptionVariants[variant]
               )}>
                 {description}
@@ -97,11 +91,8 @@ export const Modal = ({
           </DialogHeader>
         </div>
 
-        {/* Trait séparateur après le header - optionnel selon la variante */}
-        {variant === "light" && (
-          <div className="h-1 bg-gradient-to-r from-[#0052cc] via-[#1a66b3] to-[#8B5CF6] flex-shrink-0" />
-        )}
-        
+
+
         {/* Body - SCROLLABLE (c'est ici que le scroll se fait) */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 bg-white">
           <div className="space-y-4">
@@ -113,12 +104,12 @@ export const Modal = ({
 
         {/* Trait séparateur avant le footer */}
         {footer && (
-          <div className="h-px bg-gradient-to-r from-transparent via-batiflow-sky to-transparent flex-shrink-0" />
+          <div className="h-px bg-slate-100 flex-shrink-0" />
         )}
 
-        {/* Footer - FIXE en bas avec couleurs Batiflow */}
+        {/* Footer */}
         {footer && (
-          <div className="bg-gradient-to-r from-batiflow-ice via-white to-batiflow-ice p-4 sm:p-6 pt-4 rounded-b-lg flex-shrink-0 border-t border-batiflow-sky">
+          <div className="bg-slate-50 px-5 py-4 rounded-b-lg flex-shrink-0 border-t border-slate-100">
             <DialogFooter>{footer}</DialogFooter>
           </div>
         )}
@@ -165,7 +156,7 @@ export const ModalFooterButtons = ({
           className={cn(
             "shadow-lg transition-all",
             confirmVariant === "default" &&
-              "bg-gradient-to-r from-[#0052cc] to-[#1a66b3] hover:from-[#1a66b3] hover:to-[#8B5CF6] text-white shadow-[#0052cc]/30 hover:shadow-[#1a66b3]/50"
+            "bg-gradient-to-r from-[#0052cc] to-[#1a66b3] hover:from-[#1a66b3] hover:to-[#8B5CF6] text-white shadow-[#0052cc]/30 hover:shadow-[#1a66b3]/50"
           )}
         >
           {isLoading ? (

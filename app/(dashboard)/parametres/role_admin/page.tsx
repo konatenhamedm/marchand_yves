@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { ClientOnly } from '@/components/ui/client-only';
-import { Plus, ShieldCheck } from "lucide-react";
+import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, PrimaryButton, SearchBar, DataTable,
@@ -18,17 +19,27 @@ import { Show } from "./Show";
 export default function RoleAdminPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
     const [modalType, setModalType] = useState<"add" | "edit" | "delete" | "view" | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const refreshData = () => {
         setIsLoading(true);
         apiFetch("/roles/admin/all")
-            .then((res) => { setData(res.data || res); setIsLoading(false); })
+            .then((res) => { handleApiResponse(res); setIsLoading(false); })
             .catch((err) => { console.error(err.message); setIsLoading(false); });
     };
 
@@ -39,21 +50,22 @@ export default function RoleAdminPage() {
 
     const handleCloseModal = () => { setModalType(null); setSelecteditem(null); };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter(
-            (item) =>
-                searchTerm === "" ||
-                item.libelle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.code?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        : [];
-
+    const filteredData = getFilteredData(searchTerm, ["libelle", "code"]);
+    const currentitems = getPaginatedItems(filteredData);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentitems = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
     useEffect(() => { refreshData(); }, []);
 
-    const COLS = 4;
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) setSelectedIds(currentitems.map((item) => item.id));
+        else setSelectedIds([]);
+    };
+
+    const handleSelectItem = (id: number) => {
+        setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    };
+
+    const COLS = 5;
 
     return (
         <ClientOnly>
@@ -62,12 +74,19 @@ export default function RoleAdminPage() {
                 <PageHeader
                     title="Rôles Admin"
                     description="Gestion des rôles pour les administrateurs"
-                    count={filteredData.length}
+                    count={isBackendPaginated ? totalItems : filteredData.length}
                     action={
-                        <PrimaryButton onClick={() => handleOpenModal("add", {})}>
-                            <Plus className="w-4 h-4" />
-                            Nouveau rôle
-                        </PrimaryButton>
+                        <div className="flex gap-2">
+                            {selectedIds.length > 0 && (
+                                <button onClick={() => { setModalType("delete"); setSelecteditem(null); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors h-10">
+                                    <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+                                </button>
+                            )}
+                            <PrimaryButton onClick={() => handleOpenModal("add", {})}>
+                                <Plus className="w-4 h-4" />
+                                Nouveau rôle
+                            </PrimaryButton>
+                        </div>
                     }
                 />
 
@@ -85,14 +104,26 @@ export default function RoleAdminPage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
                     }
                 >
                     <table className="w-full">
-                        <TableHeaderCustom items={["#", "Code", "Libellé"]} afficheAction={true} actionWidth="100px" />
+                        <TableHeaderCustom 
+                            items={[
+                                <input 
+                                    type="checkbox" 
+                                    className="cursor-pointer"
+                                    checked={currentitems.length > 0 && selectedIds.length === currentitems.length} 
+                                    onChange={handleSelectAll} 
+                                />,
+                                "#", "Code", "Libellé"
+                            ]} 
+                            afficheAction={true} 
+                            actionWidth="100px" 
+                        />
                         <tbody>
                             {isLoading ? (
                                 <TableSkeletonRows cols={COLS} />
@@ -101,6 +132,14 @@ export default function RoleAdminPage() {
                             ) : (
                                 currentitems.map((item, index) => (
                                     <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100">
+                                        <td className={TD.muted}>
+                                            <input 
+                                                type="checkbox" 
+                                                className="cursor-pointer"
+                                                checked={selectedIds.includes(item.id)} 
+                                                onChange={() => handleSelectItem(item.id)} 
+                                            />
+                                        </td>
                                         <td className={TD.muted}>{startIndex + index + 1}</td>
                                         <td className={TD.mono}>{item.code}</td>
                                         <td className={TD.bold + " capitalize"}>{item.libelle}</td>
@@ -122,9 +161,18 @@ export default function RoleAdminPage() {
                 {selecteditem && (
                     <>
                         <Edite isOpen={modalType === "edit"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
-                        <Delete isOpen={modalType === "delete"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
                         <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
                     </>
+                )}
+                {(selecteditem || (selectedIds.length > 0 && modalType === "delete")) && (
+                    <Delete 
+                        isOpen={modalType === "delete"} 
+                        onClose={handleCloseModal} 
+                        data={selecteditem} 
+                        multiple={!selecteditem && selectedIds.length > 0}
+                        selectedIds={selectedIds}
+                        onSuccess={() => { refreshData(); setSelectedIds([]); }} 
+                    />
                 )}
             </div>
         </ClientOnly>

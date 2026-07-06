@@ -1,36 +1,62 @@
 "use client";
-import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Truck, X } from "lucide-react";
 
-interface Props { isOpen: boolean; onClose: () => void; data: any; }
-export function Show({ isOpen, onClose, data }: Props) {
+import React from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/button";
+import { Truck, X, Phone, Mail, MapPin, MessageSquare, Briefcase } from "lucide-react";
+
+interface Props { isOpen: boolean; onClose: () => void; data: any; size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full"; }
+
+export function Show({ isOpen, onClose, data, size = "md" }: Props) {
     if (!data) return null;
+
+    const LabelValue = ({ label, value, icon: Icon, fullWidth = false }: { label: string; value: any; icon?: any; fullWidth?: boolean }) => (
+        <div className={`bg-white rounded-2xl p-5 border border-slate-100 shadow-sm transition-all hover:bg-slate-50 ${fullWidth ? "col-span-full" : ""}`}>
+            <div className="flex items-start gap-4">
+                {Icon && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 text-indigo-600">
+                        <Icon className="w-4 h-4" />
+                    </div>
+                )}
+                <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                    <p className="text-[14px] font-bold text-slate-700 leading-relaxed">{value ?? "—"}</p>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl">
-                <div className="bg-gradient-to-r from-[#0052cc] to-[#1a66b3] p-6 text-white">
-                    <DialogHeader><DialogTitle className="text-xl font-bold flex items-center gap-3">
-                        <div className="bg-white/20 p-2 rounded-lg"><Truck className="h-5 w-5" /></div>Détail fournisseur
-                    </DialogTitle></DialogHeader>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={
+                <div className="flex items-center gap-3">
+                    <div className="bg-white/10 p-2 rounded-xl backdrop-blur-md border border-white/20 text-white">
+                        <Truck className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-white tracking-tight">Fiche Fournisseur</h2>
+                        <p className="text-[10px] text-white/70 font-medium uppercase tracking-widest">Partenaire d'approvisionnement</p>
+                    </div>
                 </div>
-                <div className="p-6 space-y-3 bg-white">
-                    {[
-                        ["Nom", data.nom ?? "—"],
-                        ["Téléphone", data.tel ?? "—"],
-                        ["Email", data.email ?? "—"],
-                    ].map(([label, value]) => (
-                        <div key={label} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                            <p className="text-xs text-slate-400 uppercase tracking-wider mb-0.5">{label}</p>
-                            <p className="text-sm font-semibold text-slate-800">{value}</p>
-                        </div>
-                    ))}
+            }
+            size={size}
+            footer={
+                <div className="flex justify-end w-full">
+                    <Button onClick={onClose} variant="outline" className="rounded-2xl h-11 px-8 font-black uppercase text-[10px] tracking-widest border-slate-200 hover:bg-slate-50 transition-all flex items-center gap-2">
+                        <X className="w-4 h-4" /> Fermer
+                    </Button>
                 </div>
-                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                    <Button onClick={onClose} variant="outline" className="rounded-xl flex items-center gap-2"><X className="w-4 h-4" /> Fermer</Button>
-                </div>
-            </DialogContent>
-        </Dialog>
+            }
+        >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 font-sans">
+                <LabelValue icon={Briefcase} label="Raison Sociale / Nom" value={data.nom} />
+                <LabelValue icon={Phone} label="Contact Téléphonique" value={data.tel} />
+                <LabelValue icon={Mail} label="Adresse Email Pro" value={data.email} />
+                <LabelValue icon={MapPin} label="Adresse / Localisation" value={data.adresse} />
+                <LabelValue icon={MessageSquare} label="Notes & Conditions" value={data.commentaire} fullWidth={true} />
+            </div>
+        </Modal>
     );
 }

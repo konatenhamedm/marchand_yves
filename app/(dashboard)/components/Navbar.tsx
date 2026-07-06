@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Bell, Search, PanelLeft } from 'lucide-react';
+import { Bell, Search, PanelLeft, AlignLeft, AlignRight } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 
 interface NavbarProps {
@@ -54,21 +54,25 @@ export default function Navbar({ onMenuToggle, isCollapsed, onToggleCollapse }: 
           {/* Collapse — desktop */}
           <button
             onClick={onToggleCollapse}
-            className="hidden lg:flex p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            title={isCollapsed ? 'Étendre le menu' : 'Réduire le menu'}
+            className="hidden lg:flex p-2 rounded-xl hover:bg-slate-50 text-[#0052CC] transition-all duration-200 active:scale-95 ml-[-18px]"
+            title={isCollapsed ? 'Développer' : 'Réduire'}
           >
-            <PanelLeft className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} />
+            {isCollapsed ? (
+              <AlignRight className="w-6 h-6" />
+            ) : (
+              <AlignLeft className="w-6 h-6" />
+            )}
           </button>
 
           {/* Search */}
           <div className="hidden md:flex items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+           {/*    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Rechercher..."
                 className="pl-9 pr-4 py-2 w-64 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0052CC]/20 focus:border-[#0052CC] transition-all"
-              />
+              /> */}
             </div>
           </div>
         </div>

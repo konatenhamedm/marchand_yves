@@ -7,12 +7,15 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, DataTable, TableSkeletonRows, EmptyState, ActionButtons, TD,
 } from "@/components/ui/page-components";
 import { formatDate } from "@/lib/utils";
 import { Show } from "./Show";
+import { useCurrency } from "@/hooks/useCurrency";
+import { useMagasin } from "@/context/MagasinContext";
 
 const transactionTypes = [
     { value: 'bToB', label: 'B to B' },
@@ -33,10 +36,20 @@ const transactionTypes = [
 const selectCls = "text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0052CC]/20 focus:border-[#0052CC] transition-all";
 
 export default function TransactionsPage() {
+    const { formatAmount } = useCurrency();
+    const { magasinId, magasin, isLoading: magasinLoading } = useMagasin();
     const [isLoading, setIsLoading] = useState(true);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [services, setServices] = useState<any[]>([]);
     const [selectedService, setSelectedService] = useState("all");
@@ -69,7 +82,7 @@ export default function TransactionsPage() {
 
         apiFetch(`wallet/transaction/Transaction?${queryParams}`)
             .then((res) => {
-                if (res?.data) setData(res.data.data || []);
+                handleApiResponse(res);
                 setIsLoading(false);
             })
             .catch((err) => {
@@ -165,7 +178,7 @@ export default function TransactionsPage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={data.length > 0 ? 100 : 0}
+                            totalItems={isBackendPaginated ? totalItems : data.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={setCurrentPage}
                         />
@@ -187,7 +200,7 @@ export default function TransactionsPage() {
                                     cols={COLS}
                                 />
                             ) : (
-                                data.map((item) => (
+                                getPaginatedItems(data).map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100">
                                         <td className={TD.mono}>{item.ref}</td>
                                         <td className={TD.base}>
@@ -199,11 +212,7 @@ export default function TransactionsPage() {
                                             <p className="truncate">{item.libelle}</p>
                                         </td>
                                         <td className={TD.bold}>
-                                            {new Intl.NumberFormat("fr-FR", {
-                                                style: "currency",
-                                                currency: "XOF",
-                                                maximumFractionDigits: 0,
-                                            }).format(item.montant)}
+                                            {formatAmount(item.montant)}
                                         </td>
                                         <td className={TD.muted}>{formatDate(item.transaction_date)}</td>
                                         <td className={TD.action}>

@@ -1,139 +1,110 @@
 "use client";
-
-import React, { useState } from "react";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { Modal, ModalFooterButtons } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/axios";
-import { Loader2, ShieldPlus } from "lucide-react";
+import { ShieldPlus } from "lucide-react";
 import { toast } from "sonner";
 
-interface AddProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSuccess: () => void;
-}
+interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void; size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full"; }
 
-export function Add({ isOpen, onClose, onSuccess }: AddProps) {
+export function Add({ isOpen, onClose, onSuccess, size = "md" }: Props) {
+    const { data: session } = useSession();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formData, setFormData] = useState({
-        code: "",
-        libelle: "",
-    });
+    const [libelle, setLibelle] = useState("");
+    const [featuresList, setFeaturesList] = useState<any[]>([]);
+    const [selectedFeatures, setSelectedFeatures] = useState<number[]>([]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+    useEffect(() => {
+        if (isOpen) {
+            apiFetch("/features/all", { provenance: false, method: "GET" })
+                .then(res => setFeaturesList(Array.isArray(res.data) ? res.data : (res.data?.data ?? [])))
+                .catch(err => console.error(err));
+        }
+    }, [isOpen]);
+
+    const handleFeatureToggle = (id: number) => {
+        setSelectedFeatures(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         setIsSubmitting(true);
-
         try {
-            const res = await apiFetch("/roles/marchand/create", {
+            await apiFetch("/roles/create", {
                 method: "POST",
+                provenance: true,
                 data: {
-                    code: formData.code,
-                    libelle: formData.libelle,
+                    libelle: libelle,
+                    user_owner_id: (session?.user as any)?.id || 1,
+                    features: selectedFeatures
                 }
             });
-
-            if (res) {
-                toast.success("Rôle marchand ajouté avec succès !");
-                onSuccess();
-                onClose();
-                setFormData({ code: "", libelle: "" });
-            }
-        } catch (error: any) {
-            console.error(error);
-            toast.error(error.message || "Une erreur est survenue");
+            toast.success("Rôle marchand créé !");
+            setLibelle(""); 
+            setSelectedFeatures([]);
+            onSuccess(); onClose();
+        } catch (err: any) {
+            toast.error(err.message || "Erreur lors de la création");
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl">
-                <div className="bg-gradient-to-r from-[#0052cc] via-[#1a66b3] to-[#8B5CF6] p-6 text-white">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-                            <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-                                <ShieldPlus className="h-6 w-6 text-white" />
-                            </div>
-                            Nouveau Rôle Marchand
-                        </DialogTitle>
-                    </DialogHeader>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={
+                <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-lg"><ShieldPlus className="h-5 w-5" /></div>
+                    Nouveau rôle marchand
                 </div>
-
-                <form onSubmit={handleSubmit} className="p-6 space-y-6 bg-white">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="code" className="text-[#0052cc] font-semibold">
-                                Code
-                            </Label>
-                            <Input
-                                id="code"
-                                name="code"
-                                placeholder="Ex: MARCH_BOSS"
-                                value={formData.code}
-                                onChange={handleChange}
-                                required
-                                className="border-[#0052cc]/30 focus:border-[#0052cc] focus:ring-[#0052cc]/20 rounded-xl"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="libelle" className="text-[#0052cc] font-semibold">
-                                Libellé
-                            </Label>
-                            <Input
-                                id="libelle"
-                                name="libelle"
-                                placeholder="Ex: Gérant Principal"
-                                value={formData.libelle}
-                                onChange={handleChange}
-                                required
-                                className="border-[#0052cc]/30 focus:border-[#0052cc] focus:ring-[#0052cc]/20 rounded-xl"
-                            />
-                        </div>
+            }
+            size="lg"
+            footer={
+                <ModalFooterButtons
+                    onCancel={onClose}
+                    onConfirm={handleSubmit}
+                    confirmText={isSubmitting ? "Enregistrement..." : "Enregistrer"}
+                    isLoading={isSubmitting}
+                />
+            }
+        >
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-6">
+                <div className="space-y-2">
+                    <Label className="text-[#0052cc] font-semibold">Libellé du rôle *</Label>
+                    <Input
+                        value={libelle}
+                        onChange={e => setLibelle(e.target.value)}
+                        placeholder="Ex: Admin, Vendeur..."
+                        required
+                        className="border-[#0052cc]/30 focus:border-[#0052cc] rounded-xl"
+                    />
+                </div>
+                
+              {/*   <div className="space-y-3">
+                    <Label className="text-[#0052cc] font-semibold">Permissions (Fonctionnalités)</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 max-h-[300px] overflow-y-auto">
+                        {featuresList.map(feat => (
+                            <label key={feat.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedFeatures.includes(feat.id)}
+                                    onChange={() => handleFeatureToggle(feat.id)}
+                                    className="w-4 h-4 text-[#0052cc] rounded border-slate-300 focus:ring-[#0052cc]"
+                                />
+                                <span className="text-sm font-medium text-slate-700">{feat.libelle}</span>
+                            </label>
+                        ))}
                     </div>
-
-                    <DialogFooter className="pt-4 border-t border-gray-100 flex gap-3">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className="rounded-xl border-[#0052cc]/30 text-[#0052cc] hover:bg-[#0052cc]/5"
-                        >
-                            Annuler
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="bg-gradient-to-r from-[#0052cc] to-[#1a66b3] hover:from-[#0052cc]/90 hover:to-[#1a66b3]/90 text-white shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl font-semibold px-8"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Enregistrement...
-                                </>
-                            ) : (
-                                "Enregistrer"
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                </div>
+                <p className="text-xs text-slate-400 italic">
+                    Note: Le rôle sera rattaché à votre compte.
+                </p> */}
+            </form>
+        </Modal>
     );
 }

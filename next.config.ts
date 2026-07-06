@@ -66,6 +66,20 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  turbopack: {}, // Configuration Turbopack vide pour Next.js
+
+  async rewrites() {
+    return [
+      {
+        source: '/proxy-api/:path*',
+        destination: 'https://api.moomen.pro/:path*',
+      },
+      {
+        source: '/files/images/:path*',
+        destination: 'https://api.moomen.pro/files/images/:path*',
+      },
+    ];
+  },
 };
 
 export default withPWA(nextConfig);

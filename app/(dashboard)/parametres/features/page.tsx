@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ClientOnly } from '@/components/ui/client-only';
+import { ClientOnly } from "@/components/ui/client-only";
 import { Plus, Zap } from "lucide-react";
 import { apiFetch } from "@/lib/axios";
 import { Pagination } from "@/components/ui/pagination";
+import { usePaginationData } from "@/hooks/usePaginationData";
 import { TableHeaderCustom } from "@/components/ui/TableHeaderCustom";
 import {
     PageHeader, PrimaryButton, SearchBar, DataTable,
@@ -18,18 +19,30 @@ import { Show } from "./Show";
 export default function FeaturesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
-    const itemsPerPage = 10;
+    
+    const { 
+        data, 
+        currentPage, 
+        setCurrentPage, 
+        totalItems, 
+        itemsPerPage, 
+        handleApiResponse,
+        getFilteredData,
+        getPaginatedItems,
+        isBackendPaginated,
+    } = usePaginationData(10);
 
     const [selecteditem, setSelecteditem] = useState<any | null>(null);
     const [modalType, setModalType] = useState<"add" | "edit" | "delete" | "view" | null>(null);
 
     const refreshData = () => {
         setIsLoading(true);
-        apiFetch(`/features/all?page=${currentPage}`)
-            .then((res) => { setData(res.data || res); setIsLoading(false); })
-            .catch((err) => { console.error(err.message); setIsLoading(false); });
+        apiFetch("/features/all")
+            .then((res) => {
+                handleApiResponse(res);
+                setIsLoading(false);
+            })
+            .catch(() => setIsLoading(false));
     };
 
     const handleOpenModal = (type: typeof modalType, item?: any) => {
@@ -37,23 +50,18 @@ export default function FeaturesPage() {
         if (item) setSelecteditem(item);
     };
 
-    const handleCloseModal = () => { setModalType(null); setSelecteditem(null); };
+    const handleCloseModal = () => {
+        setModalType(null);
+        setSelecteditem(null);
+    };
 
-    const filteredData = Array.isArray(data)
-        ? data.filter(
-            (item) =>
-                searchTerm === "" ||
-                item.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.libelle?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        : [];
-
+    const filteredData = getFilteredData(searchTerm, ["libelle", "code"]);
+    const currentitems = getPaginatedItems(filteredData);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentItems = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
-    useEffect(() => { refreshData(); }, [currentPage]);
+    useEffect(() => { refreshData(); }, []);
 
-    const COLS = 3;
+    const COLS = 4;
 
     return (
         <ClientOnly>
@@ -61,12 +69,12 @@ export default function FeaturesPage() {
 
                 <PageHeader
                     title="Fonctionnalités"
-                    description="Configuration des fonctionnalités système"
-                    count={filteredData.length}
+                    description="Gestion des modules et fonctionnalités de la plateforme"
+                    count={isBackendPaginated ? totalItems : filteredData.length}
                     action={
-                        <PrimaryButton onClick={() => handleOpenModal("add")}>
+                        <PrimaryButton onClick={() => handleOpenModal("add", {})}>
                             <Plus className="w-4 h-4" />
-                            Nouvelle feature
+                            Nouvelle fonctionnalité
                         </PrimaryButton>
                     }
                 />
@@ -85,24 +93,29 @@ export default function FeaturesPage() {
                     footer={
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filteredData.length}
+                            totalItems={isBackendPaginated ? totalItems : filteredData.length}
                             itemsPerPage={itemsPerPage}
-                            onPageChange={setCurrentPage}
+                            onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
                     }
                 >
                     <table className="w-full">
-                        <TableHeaderCustom items={["Code", "Libellé"]} afficheAction={true} actionWidth="100px" />
+                        <TableHeaderCustom
+                            items={["#", "Code", "Libellé"]}
+                            afficheAction={true}
+                            actionWidth="100px"
+                        />
                         <tbody>
                             {isLoading ? (
                                 <TableSkeletonRows cols={COLS} />
-                            ) : currentItems.length === 0 ? (
+                            ) : currentitems.length === 0 ? (
                                 <EmptyState message="Aucune fonctionnalité trouvée" icon={<Zap className="w-10 h-10" />} cols={COLS} />
                             ) : (
-                                currentItems.map((item) => (
-                                    <tr key={item.id} className="hover:bg-slate-50 transition-colors duration-100">
+                                currentitems.map((item, index) => (
+                                    <tr key={item.id ?? index} className="hover:bg-slate-50 transition-colors duration-100">
+                                        <td className={TD.muted}>{startIndex + index + 1}</td>
                                         <td className={TD.mono}>{item.code}</td>
-                                        <td className={TD.bold + " capitalize"}>{item.libelle}</td>
+                                        <td className={TD.bold}>{item.libelle}</td>
                                         <td className={TD.action}>
                                             <ActionButtons
                                                 onView={() => handleOpenModal("view", item)}
@@ -117,17 +130,13 @@ export default function FeaturesPage() {
                     </table>
                 </DataTable>
 
-                {modalType === "add" && (
-                    <Add isOpen={true} onClose={handleCloseModal} onSuccess={() => { handleCloseModal(); refreshData(); }} />
-                )}
-                {selecteditem && modalType === "edit" && (
-                    <Edite isOpen={true} onClose={handleCloseModal} data={selecteditem} onSuccess={() => { handleCloseModal(); refreshData(); }} />
-                )}
-                {selecteditem && modalType === "view" && (
-                    <Show isOpen={true} onClose={handleCloseModal} data={selecteditem} />
-                )}
-                {selecteditem && modalType === "delete" && (
-                    <Delete isOpen={true} onClose={handleCloseModal} data={selecteditem} onSuccess={() => { handleCloseModal(); refreshData(); }} />
+                <Add isOpen={modalType === "add"} onClose={handleCloseModal} onSuccess={refreshData} />
+                {selecteditem && (
+                    <>
+                        <Edite isOpen={modalType === "edit"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <Delete isOpen={modalType === "delete"} onClose={handleCloseModal} data={selecteditem} onSuccess={refreshData} />
+                        <Show isOpen={modalType === "view"} onClose={handleCloseModal} data={selecteditem} />
+                    </>
                 )}
             </div>
         </ClientOnly>
